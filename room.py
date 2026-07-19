@@ -2,6 +2,7 @@ import pygame
 import random
 from constants import *
 from enemy import Enemy
+from item import Item
 
 class Room:
     def __init__(self, room_type=ROOM_TYPES['NORMAL']):
@@ -73,6 +74,23 @@ class Room:
             enemy = Enemy(x, y, enemy_type)
             self.enemies.append(enemy)
     
+    def generate_treasure(self):
+        """Генерация сокровища в комнате"""
+        center_x = ROOM_OFFSET_X + ROOM_WIDTH // 2
+        center_y = ROOM_OFFSET_Y + ROOM_HEIGHT // 2
+        self.items = [Item(center_x, center_y)]
+
+    def generate_boss(self):
+        """Генерация босса в комнате"""
+        self.enemies.clear()
+        center_x = ROOM_OFFSET_X + ROOM_WIDTH // 2
+        center_y = ROOM_OFFSET_Y + ROOM_HEIGHT // 2
+        boss = Enemy(center_x, center_y, "tank")
+        boss.health *= 3
+        boss.max_health = boss.health
+        boss.damage += 1
+        self.enemies.append(boss)
+
     def add_door(self, direction):
         """Добавление двери в указанном направлении"""
         if direction in self.doors:
