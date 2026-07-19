@@ -11,11 +11,18 @@ class UI:
         self.heart_size = 16
         self.heart_spacing = 4
     
-    def draw(self, screen, player):
+    def draw(self, screen, player, floor=1):
         """Отрисовка UI"""
         self._draw_health(screen, player)
         self._draw_stats(screen, player)
         self._draw_controls(screen)
+        self._draw_floor(screen, floor)
+
+    def _draw_floor(self, screen, floor):
+        """Номер текущего этажа"""
+        text = self.font.render(f"Floor {floor}", True, WHITE)
+        rect = text.get_rect(midtop=(SCREEN_WIDTH // 2, 10))
+        screen.blit(text, rect)
     
     def _draw_health(self, screen, player):
         """Отрисовка полоски здоровья"""

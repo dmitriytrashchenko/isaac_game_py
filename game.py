@@ -16,6 +16,7 @@ class Game:
 
     def _reset(self):
         self.state = "playing"  # playing, paused, game_over
+        self.floor = 1
 
         # Создание игрока
         self.player = Player(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
@@ -69,6 +70,27 @@ class Game:
         for item in self.current_room.items:
             self.all_sprites.add(item)
             self.items.add(item)
+
+    def _get_stairs_rect(self):
+        """Прямоугольник люка на следующий этаж (появляется в центре
+        зачищенной комнаты босса)"""
+        size = 40
+        cx = ROOM_OFFSET_X + ROOM_WIDTH // 2
+        cy = ROOM_OFFSET_Y + ROOM_HEIGHT // 2
+        return pygame.Rect(cx - size // 2, cy - size // 2, size, size)
+
+    def _advance_floor(self):
+        """Переход на следующий этаж после победы над боссом.
+        Статы игрока сохраняются, подземелье генерируется заново"""
+        self.floor += 1
+
+        self.dungeon = Dungeon()
+        self.door_detector = DoorDetector()
+        self.transition = RoomTransition()
+        self._room_swapped_this_transition = False
+
+        self._load_current_room()
+        self.player.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
 
     def handle_event(self, event):
         if event.type == pygame.KEYDOWN:
@@ -183,6 +205,12 @@ class Game:
         if len(self.enemies) == 0 and len(self.current_room.enemies) > 0:
             self.current_room.cleared = True
 
+        # Комната босса зачищена — проверяем, не наступил ли игрок на люк
+        if self.current_room.room_type == ROOM_TYPES['BOSS'] and self.current_room.cleared:
+            if self.player.rect.colliderect(self._get_stairs_rect()):
+                self._advance_floor()
+                return
+
         # Проверка перехода в соседнюю комнату через дверь
         direction = self.door_detector.check_door_collision(self.player.rect, self.current_room)
         if direction and self.dungeon.can_move_to(direction):
@@ -258,11 +286,16 @@ class Game:
             # Отрисовка комнаты
             self.current_room.draw(self.screen)
 
+            # Люк на следующий этаж, если босс побеждён
+            if self.current_room.room_type == ROOM_TYPES['BOSS'] and self.current_room.cleared:
+                pygame.draw.rect(self.screen, (80, 0, 120), self._get_stairs_rect())
+                pygame.draw.rect(self.screen, WHITE, self._get_stairs_rect(), 2)
+
             # Отрисовка всех спрайтов
             self.all_sprites.draw(self.screen)
 
             # Отрисовка UI
-            self.ui.draw(self.screen, self.player)
+            self.ui.draw(self.screen, self.player, self.floor)
 
             # Мини-карта подземелья
             self.ui.draw_minimap(self.screen, self.dungeon.get_minimap_data())
