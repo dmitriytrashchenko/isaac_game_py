@@ -2,7 +2,7 @@
 
 Простая 2D игрушка в стиле The Binding of Isaac, написанная на Python с использованием библиотеки Pygame.
 
-📓 База знаний проекта — Obsidian-vault прямо в этой папке (`.obsidian/`). См. [Changelog.md](Changelog.md) и [Known_Issues.md](Known_Issues.md).
+📓 База знаний проекта — Obsidian-vault прямо в этой папке (`.obsidian/`). См. [Changelog.md](Changelog.md), [Known_Issues.md](Known_Issues.md) и [Setting.md](Setting.md) (дизайн-документ сеттинга).
 
 ## Особенности
 
