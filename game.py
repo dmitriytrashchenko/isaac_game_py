@@ -39,6 +39,10 @@ class Game:
 
         self._load_current_room()
 
+        # Флаг: комната уже подменена в текущем переходе (срабатывает
+        # один раз в момент полной черноты экрана, см. update())
+        self._room_swapped_this_transition = False
+
     @property
     def current_room(self):
         return self.dungeon.current_room
@@ -79,6 +83,12 @@ class Game:
 
         if self.transition.is_transitioning:
             self.transition.update(dt)
+            # Меняем комнату ровно в момент полной черноты экрана (середина
+            # перехода), а не в конце — иначе смена происходит уже на свету
+            # и выглядит как рывок/телепорт на глазах у игрока
+            if self.transition.is_halfway() and not self._room_swapped_this_transition:
+                self._complete_room_transition(self.transition.direction)
+                self._room_swapped_this_transition = True
             return
 
         # Обновление игрока
@@ -151,7 +161,8 @@ class Game:
         # Проверка перехода в соседнюю комнату через дверь
         direction = self.door_detector.check_door_collision(self.player.rect, self.current_room)
         if direction and self.dungeon.can_move_to(direction):
-            self.transition.start_transition(direction, on_complete=lambda d=direction: self._complete_room_transition(d))
+            self._room_swapped_this_transition = False
+            self.transition.start_transition(direction)
 
     def _complete_room_transition(self, direction):
         if not self.dungeon.move_to_room(direction):
