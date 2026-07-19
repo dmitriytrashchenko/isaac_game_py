@@ -166,15 +166,19 @@ class Game:
         cx = ROOM_OFFSET_X + ROOM_WIDTH // 2
         cy = ROOM_OFFSET_Y + ROOM_HEIGHT // 2
 
-        # Ставим игрока у противоположной двери новой комнаты
+        # Ставим игрока у противоположной двери новой комнаты, но с запасом,
+        # чтобы не попасть прямо в зону обнаружения этой же двери и не
+        # запустить переход обратно на следующем кадре (зона двери уходит
+        # ~30px вглубь комнаты за счёт zone_padding в DoorDetector)
+        spawn_margin = 80
         if direction == 'up':
-            self.player.rect.midbottom = (cx, room_bottom - 4)
+            self.player.rect.midbottom = (cx, room_bottom - spawn_margin)
         elif direction == 'down':
-            self.player.rect.midtop = (cx, room_top + 4)
+            self.player.rect.midtop = (cx, room_top + spawn_margin)
         elif direction == 'left':
-            self.player.rect.midright = (room_right - 4, cy)
+            self.player.rect.midright = (room_right - spawn_margin, cy)
         elif direction == 'right':
-            self.player.rect.midleft = (room_left + 4, cy)
+            self.player.rect.midleft = (room_left + spawn_margin, cy)
 
     def _check_room_boundaries(self):
         # Ограничение движения игрока границами комнаты, с проёмами в открытых дверях
