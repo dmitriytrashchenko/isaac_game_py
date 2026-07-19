@@ -10,37 +10,43 @@ from ui import UI
 class Game:
     def __init__(self, screen):
         self.screen = screen
+        self._reset()
+
+    def _reset(self):
         self.state = "playing"  # playing, paused, game_over
-        
+
         # Создание игрока
         self.player = Player(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
-        
+
         # Создание UI
         self.ui = UI()
-        
+
         # Создание первой комнаты
         self.current_room = Room(ROOM_TYPES['NORMAL'])
         self.current_room.generate_enemies(3)
-        
+
         # Группы спрайтов
         self.all_sprites = pygame.sprite.Group()
         self.enemies = pygame.sprite.Group()
         self.tears = pygame.sprite.Group()
         self.items = pygame.sprite.Group()
-        
+
         # Добавляем игрока в группу спрайтов
         self.all_sprites.add(self.player)
-        
+
         # Добавляем врагов в группы
         for enemy in self.current_room.enemies:
             self.all_sprites.add(enemy)
             self.enemies.add(enemy)
-    
+
     def handle_event(self, event):
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
+            if event.key == pygame.K_ESCAPE and self.state != "game_over":
                 self.state = "paused" if self.state == "playing" else "playing"
-        
+            elif event.key == pygame.K_r and self.state == "game_over":
+                self._reset()
+                return
+
         self.player.handle_event(event)
     
     def update(self, dt):
