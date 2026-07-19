@@ -104,6 +104,10 @@ class Room:
         boss.damage += 1
         self.enemies.append(boss)
 
+    def is_locked(self):
+        """Комната заперта, если в ней изначально были враги и она ещё не зачищена"""
+        return len(self.enemies) > 0 and not self.cleared
+
     def add_door(self, direction):
         """Добавление двери в указанном направлении"""
         if direction in self.doors:
@@ -124,45 +128,45 @@ class Room:
         for wall in self.walls:
             pygame.draw.rect(screen, BROWN, wall)
         
-        # Отрисовка дверей (пропуски в стенах)
+        # Отрисовка дверей (пропуски в стенах). Если в комнате есть живые
+        # враги — двери рисуются запертыми (сплошная стена + красная рамка),
+        # проход через них физически блокируется в Game._check_room_boundaries
         door_width = 60
         door_height = 20
-        
-        if self.doors['up']:
-            door_rect = pygame.Rect(
+        locked = self.is_locked()
+
+        door_rects = {
+            'up': pygame.Rect(
                 ROOM_OFFSET_X + ROOM_WIDTH // 2 - door_width // 2,
                 ROOM_OFFSET_Y,
-                door_width,
-                door_height
-            )
-            pygame.draw.rect(screen, DARK_GRAY, door_rect)
-            
-        if self.doors['down']:
-            door_rect = pygame.Rect(
+                door_width, door_height
+            ),
+            'down': pygame.Rect(
                 ROOM_OFFSET_X + ROOM_WIDTH // 2 - door_width // 2,
                 ROOM_OFFSET_Y + ROOM_HEIGHT - door_height,
-                door_width,
-                door_height
-            )
-            pygame.draw.rect(screen, DARK_GRAY, door_rect)
-            
-        if self.doors['left']:
-            door_rect = pygame.Rect(
+                door_width, door_height
+            ),
+            'left': pygame.Rect(
                 ROOM_OFFSET_X,
                 ROOM_OFFSET_Y + ROOM_HEIGHT // 2 - door_width // 2,
-                door_height,
-                door_width
-            )
-            pygame.draw.rect(screen, DARK_GRAY, door_rect)
-            
-        if self.doors['right']:
-            door_rect = pygame.Rect(
+                door_height, door_width
+            ),
+            'right': pygame.Rect(
                 ROOM_OFFSET_X + ROOM_WIDTH - door_height,
                 ROOM_OFFSET_Y + ROOM_HEIGHT // 2 - door_width // 2,
-                door_height,
-                door_width
+                door_height, door_width
             )
-            pygame.draw.rect(screen, DARK_GRAY, door_rect)
+        }
+
+        for direction, door_rect in door_rects.items():
+            if not self.doors[direction]:
+                continue
+
+            if locked:
+                pygame.draw.rect(screen, BROWN, door_rect)
+                pygame.draw.rect(screen, RED, door_rect, 2)
+            else:
+                pygame.draw.rect(screen, DARK_GRAY, door_rect)
         
         # Отрисовка индикатора очистки комнаты
         if self.cleared:

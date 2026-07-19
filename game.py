@@ -228,10 +228,13 @@ class Game:
         in_horizontal_gap = abs(self.player.rect.centerx - cx) < door_width // 2
         in_vertical_gap = abs(self.player.rect.centery - cy) < door_width // 2
 
-        can_pass_left = self.current_room.doors['left'] and in_vertical_gap
-        can_pass_right = self.current_room.doors['right'] and in_vertical_gap
-        can_pass_top = self.current_room.doors['up'] and in_horizontal_gap
-        can_pass_bottom = self.current_room.doors['down'] and in_horizontal_gap
+        # Пока в комнате есть живые враги, двери физически заперты
+        room_open = not self.current_room.is_locked()
+
+        can_pass_left = self.current_room.doors['left'] and in_vertical_gap and room_open
+        can_pass_right = self.current_room.doors['right'] and in_vertical_gap and room_open
+        can_pass_top = self.current_room.doors['up'] and in_horizontal_gap and room_open
+        can_pass_bottom = self.current_room.doors['down'] and in_horizontal_gap and room_open
 
         if not can_pass_left and self.player.rect.left < room_left:
             self.player.rect.left = room_left
