@@ -1,5 +1,6 @@
 import pygame
 import random
+import math
 from constants import *
 
 class Item(pygame.sprite.Sprite):
@@ -91,6 +92,3 @@ class Item(pygame.sprite.Sprite):
             player.increase_tear_rate(0.05)
         elif self.item_type == "max_health":
             player.increase_max_health(2)
-
-# Импорт math для анимации
-import math

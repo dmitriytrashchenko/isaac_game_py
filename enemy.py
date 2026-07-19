@@ -1,6 +1,5 @@
 import pygame
 import random
-import math
 from constants import *
 
 class Enemy(pygame.sprite.Sprite):
@@ -48,19 +47,8 @@ class Enemy(pygame.sprite.Sprite):
         
         # Движение
         self.velocity = pygame.math.Vector2(0, 0)
-        self.target_pos = (x, y)
-        
-        # ИИ
-        self.state_timer = 0
-        self.wander_timer = 0
-        self.wander_direction = pygame.math.Vector2(
-            random.uniform(-1, 1),
-            random.uniform(-1, 1)
-        ).normalize()
-    
+
     def update(self, dt, player_pos):
-        self.state_timer += dt
-        
         if self.ai_type == "chase":
             self._ai_chase(dt, player_pos)
         elif self.ai_type == "shoot":
