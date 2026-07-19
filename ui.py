@@ -11,12 +11,20 @@ class UI:
         self.heart_size = 16
         self.heart_spacing = 4
     
-    def draw(self, screen, player, floor=1):
+    def draw(self, screen, player, floor=1, hero_name=None):
         """Отрисовка UI"""
         self._draw_health(screen, player)
         self._draw_stats(screen, player)
         self._draw_controls(screen)
         self._draw_floor(screen, floor)
+        if hero_name:
+            self._draw_hero_name(screen, hero_name)
+
+    def _draw_hero_name(self, screen, hero_name):
+        """Имя выбранного на старте героя (верхний левый угол, под сердечками)"""
+        text = self.small_font.render(hero_name, True, GOLD)
+        rect = text.get_rect(topleft=(20, 130))
+        screen.blit(text, rect)
 
     def _draw_floor(self, screen, floor):
         """Номер текущего этажа"""

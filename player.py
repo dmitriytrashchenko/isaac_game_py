@@ -1,18 +1,19 @@
 import pygame
 import math
 from constants import *
-from tear import Tear
+from tear import Tear, MeleeSwing
+import viewport
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, x, y):
+    def __init__(self, x, y, weapon="bow"):
         super().__init__()
-        
+
         # Создание поверхности игрока
         self.image = pygame.Surface((PLAYER_SIZE, PLAYER_SIZE))
         self.image.fill(YELLOW)
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
-        
+
         # Характеристики игрока
         self.health = PLAYER_MAX_HEALTH
         self.max_health = PLAYER_MAX_HEALTH
@@ -20,18 +21,35 @@ class Player(pygame.sprite.Sprite):
         self.tear_damage = PLAYER_TEAR_DAMAGE
         self.tear_speed = PLAYER_TEAR_SPEED
         self.tear_rate = PLAYER_TEAR_RATE
-        
+
+        # Оружие героя ("bow" Лучник / "sword" Воин / "staff" Маг) — см.
+        # menu.py HEROES и Setting.md. Влияет на стиль атаки и часть статов.
+        self.weapon = weapon
+        self.flat_damage_reduction = 0
+        if weapon == "sword":
+            # Воин: ближний бой, урон выше, скорость атаки чуть ниже,
+            # щит полностью гасит слабые удары (флэт-редукция урона)
+            self.tear_damage = PLAYER_TEAR_DAMAGE * 3
+            self.tear_rate = PLAYER_TEAR_RATE * 1.3
+            self.flat_damage_reduction = 1
+        elif weapon == "staff":
+            # Маг: файрболы — медленнее и реже, но сильнее и крупнее
+            self.tear_speed = PLAYER_TEAR_SPEED * 0.6
+            self.tear_damage = PLAYER_TEAR_DAMAGE * 2
+            self.tear_rate = PLAYER_TEAR_RATE * 1.6
+
         # Движение
         self.velocity = pygame.math.Vector2(0, 0)
-        
-        # Стрельба
+
+        # Стрельба / атака
         self.last_shot = 0
         self.new_tears = []
-        
+        self.new_melee_swings = []
+
         # Урон
         self.invulnerable_time = 0
         self.invulnerable_duration = 1.0  # секунды неуязвимости после получения урона
-        
+
         # Клавиши движения (только WASD — как в оригинале, стрелки не
         # двигают персонажа, а только целятся/стреляют, иначе зажатая
         # стрелка для выстрела перебивала бы противоположное движение WASD)
@@ -126,7 +144,7 @@ class Player(pygame.sprite.Sprite):
         # Мышь имеет приоритет над стрелками, если зажата ЛКМ — целится
         # на все 360° в сторону курсора, а не только по 4 направлениям
         if self.mouse_aim_active:
-            mouse_pos = pygame.math.Vector2(pygame.mouse.get_pos())
+            mouse_pos = pygame.math.Vector2(viewport.to_logical(pygame.mouse.get_pos()))
             to_mouse = mouse_pos - pygame.math.Vector2(self.rect.center)
             if to_mouse.length() > 0:
                 shoot_direction = to_mouse.normalize()
@@ -135,36 +153,68 @@ class Player(pygame.sprite.Sprite):
             last_key = self.shoot_key_order[-1]
             shoot_direction = self.shoot_key_to_direction[last_key]
 
-        # Стрельба
+        # Атака
         if shoot_direction is not None and self.last_shot >= self.tear_rate:
-            self._shoot(shoot_direction)
+            if self.weapon == "sword":
+                self._melee_attack(shoot_direction)
+            else:
+                self._shoot(shoot_direction)
             self.last_shot = 0
-    
-    def _shoot(self, direction):
+
+    def _blend_with_momentum(self, direction):
         # Как в оригинале: импульс движения подмешивается к направлению
-        # выстрела, давая диагональный "закрут" слёз при стрельбе на бегу
+        # атаки, давая диагональный "закрут" при стрельбе/ударе на бегу
         momentum_weight = 0.35
         aim_dir = pygame.math.Vector2(direction)
         if self.velocity.length() > 0:
             blended = aim_dir + self.velocity.normalize() * momentum_weight
             if blended.length() > 0:
                 aim_dir = blended.normalize()
+        return aim_dir
 
-        # Создание слезы
-        tear_x = self.rect.centerx + aim_dir.x * (PLAYER_SIZE // 2 + TEAR_SIZE // 2)
-        tear_y = self.rect.centery + aim_dir.y * (PLAYER_SIZE // 2 + TEAR_SIZE // 2)
+    def _shoot(self, direction):
+        aim_dir = self._blend_with_momentum(direction)
 
-        tear = Tear(tear_x, tear_y, aim_dir, self.tear_speed, self.tear_damage)
+        color = BLUE
+        size = TEAR_SIZE
+        if self.weapon == "staff":
+            color = FIRE_ORANGE
+            size = TEAR_SIZE + 6
+
+        tear_x = self.rect.centerx + aim_dir.x * (PLAYER_SIZE // 2 + size // 2)
+        tear_y = self.rect.centery + aim_dir.y * (PLAYER_SIZE // 2 + size // 2)
+
+        tear = Tear(tear_x, tear_y, aim_dir, self.tear_speed, self.tear_damage, color=color, size=size)
         self.new_tears.append(tear)
-    
+
+    def _melee_attack(self, direction):
+        # Воин: мгновенный удар мечом в направлении прицела вместо снаряда —
+        # урон применяется в Game (нужен доступ к группе врагов), тут только
+        # формируется запрос на удар с позицией/направлением/уроном
+        aim_dir = self._blend_with_momentum(direction)
+        swing_x = self.rect.centerx + aim_dir.x * 30
+        swing_y = self.rect.centery + aim_dir.y * 30
+        self.new_melee_swings.append({
+            "pos": (swing_x, swing_y),
+            "damage": self.tear_damage,
+        })
+
     def get_new_tears(self):
         # Возвращает и очищает список новых слёз
         tears = self.new_tears.copy()
         self.new_tears.clear()
         return tears
+
+    def get_new_melee_swings(self):
+        # Возвращает и очищает список новых ударов мечом
+        swings = self.new_melee_swings.copy()
+        self.new_melee_swings.clear()
+        return swings
     
     def take_damage(self, damage):
         if self.invulnerable_time <= 0:
+            # Щит Воина полностью гасит слабые удары (флэт-редукция)
+            damage = max(0, damage - self.flat_damage_reduction)
             self.health -= damage
             self.invulnerable_time = self.invulnerable_duration
             

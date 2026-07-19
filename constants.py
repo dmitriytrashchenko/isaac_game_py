@@ -15,6 +15,7 @@ DARK_GRAY = (64, 64, 64)
 BROWN = (139, 69, 19)
 GOLD = (212, 175, 55)
 DARK_GOLD = (120, 90, 0)
+FIRE_ORANGE = (255, 140, 0)
 
 # Размеры комнаты
 ROOM_WIDTH = 640

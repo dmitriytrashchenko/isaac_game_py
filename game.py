@@ -5,22 +5,30 @@ from player import Player
 from enemy import Enemy
 from room import Room
 from item import Item
+from tear import MeleeSwing
 from chest import TIER_COLORS
 from ui import UI
 from dungeon import Dungeon
 from transition import RoomTransition, DoorDetector
 
 class Game:
-    def __init__(self, screen):
+    def __init__(self, screen, hero=None):
         self.screen = screen
+        # Выбранный на экране выбора героя персонаж (см. menu.py). Пока
+        # влияет только на отображаемое имя — уникальная механика классов
+        # (ближний бой Воина, файрболы Мага) ещё не реализована, все три
+        # героя физически играются как Лучник. См. Setting.md.
+        self.hero = hero
         self._reset()
 
     def _reset(self):
         self.state = "playing"  # playing, paused, game_over
         self.floor = 1
 
-        # Создание игрока
-        self.player = Player(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
+        # Создание игрока — оружие берётся из выбранного героя (Лучник
+        # "bow" / Воин "sword" / Маг "staff"), см. menu.py и Setting.md
+        weapon = self.hero["weapon"] if self.hero else "bow"
+        self.player = Player(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2, weapon=weapon)
 
         # Создание UI
         self.ui = UI()
@@ -37,6 +45,7 @@ class Game:
         self.enemy_tears = pygame.sprite.Group()
         self.items = pygame.sprite.Group()
         self.chests = pygame.sprite.Group()
+        self.effects = pygame.sprite.Group()  # чисто визуальные, без коллизий (вспышка удара мечом)
 
         # Добавляем игрока в группу спрайтов
         self.all_sprites.add(self.player)
@@ -68,6 +77,8 @@ class Game:
             item.kill()
         for chest in list(self.chests):
             chest.kill()
+        for effect in list(self.effects):
+            effect.kill()
 
         # Живые враги комнаты (мёртвые из прошлого визита не воскрешаем)
         for enemy in self.current_room.enemies:
@@ -84,6 +95,14 @@ class Game:
         if self.current_room.chest:
             self.all_sprites.add(self.current_room.chest)
             self.chests.add(self.current_room.chest)
+
+    def _kill_enemy_with_drop(self, enemy):
+        """Убивает врага, с шансом 30% оставляя предмет на его месте"""
+        if random.random() < 0.3:
+            item = Item(enemy.rect.centerx, enemy.rect.centery)
+            self.all_sprites.add(item)
+            self.items.add(item)
+        enemy.kill()
 
     def _get_stairs_rect(self):
         """Прямоугольник люка на следующий этаж (появляется в центре
@@ -143,6 +162,21 @@ class Game:
             self.all_sprites.add(tear)
             self.tears.add(tear)
 
+        # Удары мечом (Воин) — урон применяется мгновенно здесь (у Player
+        # нет доступа к группе врагов), плюс визуальная вспышка
+        for swing in self.player.get_new_melee_swings():
+            swing_rect = pygame.Rect(0, 0, 40, 40)
+            swing_rect.center = swing["pos"]
+            for enemy in list(self.enemies):
+                if swing_rect.colliderect(enemy.rect):
+                    enemy.take_damage(swing["damage"])
+                    if enemy.health <= 0:
+                        self._kill_enemy_with_drop(enemy)
+
+            slash = MeleeSwing(swing["pos"])
+            self.all_sprites.add(slash)
+            self.effects.add(slash)
+
         # Обновление врагов
         for enemy in self.enemies:
             enemy.update(dt, self.player.rect.center)
@@ -151,6 +185,11 @@ class Game:
             for tear in enemy.get_new_tears():
                 self.all_sprites.add(tear)
                 self.enemy_tears.add(tear)
+
+        # Обновление визуальных эффектов (вспышка удара мечом), сами
+        # себя удаляют по истечении lifetime в update()
+        for effect in list(self.effects):
+            effect.update(dt)
 
         # Обновление слёз
         for tear in self.tears:
@@ -188,14 +227,8 @@ class Game:
                 enemy.take_damage(tear.damage)
                 tear.kill()
 
-                # Проверка смерти врага
                 if enemy.health <= 0:
-                    # Шанс выпадения предмета
-                    if random.random() < 0.3:
-                        item = Item(enemy.rect.centerx, enemy.rect.centery)
-                        self.all_sprites.add(item)
-                        self.items.add(item)
-                    enemy.kill()
+                    self._kill_enemy_with_drop(enemy)
 
         # Столкновения игрока с врагами
         hit_enemies = pygame.sprite.spritecollide(self.player, self.enemies, False)
@@ -338,7 +371,8 @@ class Game:
             self.screen.blit(self.player.image, self.player.rect)
 
             # Отрисовка UI
-            self.ui.draw(self.screen, self.player, self.floor)
+            hero_name = self.hero["name"] if self.hero else None
+            self.ui.draw(self.screen, self.player, self.floor, hero_name)
 
             # Всплывающая надпись о призе из сундука
             if self.pickup_message_timer > 0:
