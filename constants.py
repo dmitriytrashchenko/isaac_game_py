@@ -24,6 +24,10 @@ ROOM_OFFSET_Y = (SCREEN_HEIGHT - ROOM_HEIGHT) // 2
 TILE_SIZE = 32
 WALL_THICKNESS = 16
 
+# Отступ от стены, на который ставится игрок при входе в новую комнату
+# через дверь (используется и для защитной зоны от спавна врагов рядом с ним)
+ROOM_ENTRY_MARGIN = 80
+
 # Игрок
 PLAYER_SIZE = 24
 PLAYER_SPEED = 200

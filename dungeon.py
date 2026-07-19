@@ -186,18 +186,36 @@ class Dungeon:
             self.current_room.visited = True
             self.visited_rooms.add(new_pos)
             
-            # Генерируем врагов для новой комнаты
+            # Генерируем врагов для новой комнаты, подальше от двери, через
+            # которую войдёт игрок, чтобы не спавнить их у него под ногами
             if self.current_room.room_type == ROOM_TYPES['NORMAL']:
                 enemy_count = random.randint(2, 5)
-                self.current_room.generate_enemies(enemy_count)
+                entry_pos = self._get_entry_position(direction)
+                self.current_room.generate_enemies(enemy_count, avoid_pos=entry_pos, min_distance=150)
             elif self.current_room.room_type == ROOM_TYPES['TREASURE']:
                 # В комнате сокровищ нет врагов, но есть предмет
                 self.current_room.generate_treasure()
             elif self.current_room.room_type == ROOM_TYPES['BOSS']:
                 # В комнате босса один сильный враг
                 self.current_room.generate_boss()
-        
+
         return True
+
+    def _get_entry_position(self, direction):
+        """Точка, где игрок появится в новой комнате после перехода в direction"""
+        cx = ROOM_OFFSET_X + ROOM_WIDTH // 2
+        cy = ROOM_OFFSET_Y + ROOM_HEIGHT // 2
+
+        if direction == 'up':
+            return (cx, ROOM_OFFSET_Y + ROOM_HEIGHT - WALL_THICKNESS - ROOM_ENTRY_MARGIN)
+        elif direction == 'down':
+            return (cx, ROOM_OFFSET_Y + WALL_THICKNESS + ROOM_ENTRY_MARGIN)
+        elif direction == 'left':
+            return (ROOM_OFFSET_X + ROOM_WIDTH - WALL_THICKNESS - ROOM_ENTRY_MARGIN, cy)
+        elif direction == 'right':
+            return (ROOM_OFFSET_X + WALL_THICKNESS + ROOM_ENTRY_MARGIN, cy)
+
+        return (cx, cy)
     
     def get_minimap_data(self):
         """Получение данных для мини-карты"""

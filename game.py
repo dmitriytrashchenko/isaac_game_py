@@ -170,15 +170,14 @@ class Game:
         # чтобы не попасть прямо в зону обнаружения этой же двери и не
         # запустить переход обратно на следующем кадре (зона двери уходит
         # ~30px вглубь комнаты за счёт zone_padding в DoorDetector)
-        spawn_margin = 80
         if direction == 'up':
-            self.player.rect.midbottom = (cx, room_bottom - spawn_margin)
+            self.player.rect.midbottom = (cx, room_bottom - ROOM_ENTRY_MARGIN)
         elif direction == 'down':
-            self.player.rect.midtop = (cx, room_top + spawn_margin)
+            self.player.rect.midtop = (cx, room_top + ROOM_ENTRY_MARGIN)
         elif direction == 'left':
-            self.player.rect.midright = (room_right - spawn_margin, cy)
+            self.player.rect.midright = (room_right - ROOM_ENTRY_MARGIN, cy)
         elif direction == 'right':
-            self.player.rect.midleft = (room_left + spawn_margin, cy)
+            self.player.rect.midleft = (room_left + ROOM_ENTRY_MARGIN, cy)
 
     def _check_room_boundaries(self):
         # Ограничение движения игрока границами комнаты, с проёмами в открытых дверях

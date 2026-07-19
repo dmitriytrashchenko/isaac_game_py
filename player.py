@@ -32,16 +32,14 @@ class Player(pygame.sprite.Sprite):
         self.invulnerable_time = 0
         self.invulnerable_duration = 1.0  # секунды неуязвимости после получения урона
         
-        # Клавиши движения
+        # Клавиши движения (только WASD — как в оригинале, стрелки не
+        # двигают персонажа, а только целятся/стреляют, иначе зажатая
+        # стрелка для выстрела перебивала бы противоположное движение WASD)
         self.keys_pressed = {
             pygame.K_w: False,
             pygame.K_a: False,
             pygame.K_s: False,
-            pygame.K_d: False,
-            pygame.K_UP: False,
-            pygame.K_LEFT: False,
-            pygame.K_DOWN: False,
-            pygame.K_RIGHT: False
+            pygame.K_d: False
         }
 
         # Направления стрельбы по стрелкам: как в оригинальном Айзеке,
@@ -97,13 +95,13 @@ class Player(pygame.sprite.Sprite):
         self.velocity.y = 0
         
         # Проверяем нажатые клавиши движения
-        if self.keys_pressed[pygame.K_w] or self.keys_pressed[pygame.K_UP]:
+        if self.keys_pressed[pygame.K_w]:
             self.velocity.y = -self.speed
-        if self.keys_pressed[pygame.K_s] or self.keys_pressed[pygame.K_DOWN]:
+        if self.keys_pressed[pygame.K_s]:
             self.velocity.y = self.speed
-        if self.keys_pressed[pygame.K_a] or self.keys_pressed[pygame.K_LEFT]:
+        if self.keys_pressed[pygame.K_a]:
             self.velocity.x = -self.speed
-        if self.keys_pressed[pygame.K_d] or self.keys_pressed[pygame.K_RIGHT]:
+        if self.keys_pressed[pygame.K_d]:
             self.velocity.x = self.speed
         
         # Нормализация диагонального движения

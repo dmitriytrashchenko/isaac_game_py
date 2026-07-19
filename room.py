@@ -52,25 +52,38 @@ class Room:
             wall_rect = pygame.Rect(ROOM_OFFSET_X + ROOM_WIDTH - WALL_THICKNESS, y, WALL_THICKNESS, TILE_SIZE)
             self.walls.append(wall_rect)
     
-    def generate_enemies(self, count):
-        """Генерация врагов в комнате"""
+    def generate_enemies(self, count, avoid_pos=None, min_distance=150):
+        """Генерация врагов в комнате, подальше от точки входа игрока (avoid_pos)"""
         self.enemies.clear()
-        
+
         enemy_types = ["basic", "shooter", "tank"]
-        
+
         for _ in range(count):
-            # Случайная позиция в комнате (избегаем стен)
+            # Случайная позиция в комнате (избегаем стен и точки входа игрока)
             margin = 50
-            x = random.randint(ROOM_OFFSET_X + margin, ROOM_OFFSET_X + ROOM_WIDTH - margin)
-            y = random.randint(ROOM_OFFSET_Y + margin, ROOM_OFFSET_Y + ROOM_HEIGHT - margin)
-            
+            x, y = None, None
+            for _attempt in range(30):
+                candidate_x = random.randint(ROOM_OFFSET_X + margin, ROOM_OFFSET_X + ROOM_WIDTH - margin)
+                candidate_y = random.randint(ROOM_OFFSET_Y + margin, ROOM_OFFSET_Y + ROOM_HEIGHT - margin)
+                if avoid_pos is None:
+                    x, y = candidate_x, candidate_y
+                    break
+                dx = candidate_x - avoid_pos[0]
+                dy = candidate_y - avoid_pos[1]
+                if (dx * dx + dy * dy) ** 0.5 >= min_distance:
+                    x, y = candidate_x, candidate_y
+                    break
+            if x is None:
+                # Не нашли позицию подальше за 30 попыток — берём последнюю как есть
+                x, y = candidate_x, candidate_y
+
             # Случайный тип врага
             enemy_type = random.choice(enemy_types)
-            
+
             # Уменьшаем шанс появления танка
             if enemy_type == "tank" and random.random() > 0.3:
                 enemy_type = "basic"
-            
+
             enemy = Enemy(x, y, enemy_type)
             self.enemies.append(enemy)
     
