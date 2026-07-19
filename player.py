@@ -43,14 +43,29 @@ class Player(pygame.sprite.Sprite):
             pygame.K_DOWN: False,
             pygame.K_RIGHT: False
         }
-    
+
+        # Направления стрельбы по стрелкам: как в оригинальном Айзеке,
+        # целится по ПОСЛЕДНЕЙ зажатой стрелке, а не по фиксированному
+        # приоритету. Список хранит зажатые стрелки в порядке нажатия.
+        self.shoot_key_to_direction = {
+            pygame.K_UP: DIRECTIONS['UP'],
+            pygame.K_DOWN: DIRECTIONS['DOWN'],
+            pygame.K_LEFT: DIRECTIONS['LEFT'],
+            pygame.K_RIGHT: DIRECTIONS['RIGHT']
+        }
+        self.shoot_key_order = []
+
     def handle_event(self, event):
         if event.type == pygame.KEYDOWN:
             if event.key in self.keys_pressed:
                 self.keys_pressed[event.key] = True
+            if event.key in self.shoot_key_to_direction and event.key not in self.shoot_key_order:
+                self.shoot_key_order.append(event.key)
         elif event.type == pygame.KEYUP:
             if event.key in self.keys_pressed:
                 self.keys_pressed[event.key] = False
+            if event.key in self.shoot_key_order:
+                self.shoot_key_order.remove(event.key)
     
     def update(self, dt):
         # Обновление времени неуязвимости
@@ -100,19 +115,12 @@ class Player(pygame.sprite.Sprite):
         self.rect.y += self.velocity.y * dt
     
     def _handle_shooting(self, dt):
-        # Проверяем стрельбу стрелками
+        # Целимся по последней зажатой стрелке (как в оригинале)
         shoot_direction = None
-        
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_UP]:
-            shoot_direction = DIRECTIONS['UP']
-        elif keys[pygame.K_DOWN]:
-            shoot_direction = DIRECTIONS['DOWN']
-        elif keys[pygame.K_LEFT]:
-            shoot_direction = DIRECTIONS['LEFT']
-        elif keys[pygame.K_RIGHT]:
-            shoot_direction = DIRECTIONS['RIGHT']
-        
+        if self.shoot_key_order:
+            last_key = self.shoot_key_order[-1]
+            shoot_direction = self.shoot_key_to_direction[last_key]
+
         # Стрельба
         if shoot_direction and self.last_shot >= self.tear_rate:
             self._shoot(shoot_direction)
