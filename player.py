@@ -127,11 +127,20 @@ class Player(pygame.sprite.Sprite):
             self.last_shot = 0
     
     def _shoot(self, direction):
+        # Как в оригинале: импульс движения подмешивается к направлению
+        # выстрела, давая диагональный "закрут" слёз при стрельбе на бегу
+        momentum_weight = 0.35
+        aim_dir = pygame.math.Vector2(direction)
+        if self.velocity.length() > 0:
+            blended = aim_dir + self.velocity.normalize() * momentum_weight
+            if blended.length() > 0:
+                aim_dir = blended.normalize()
+
         # Создание слезы
-        tear_x = self.rect.centerx + direction[0] * (PLAYER_SIZE // 2 + TEAR_SIZE // 2)
-        tear_y = self.rect.centery + direction[1] * (PLAYER_SIZE // 2 + TEAR_SIZE // 2)
-        
-        tear = Tear(tear_x, tear_y, direction, self.tear_speed, self.tear_damage)
+        tear_x = self.rect.centerx + aim_dir.x * (PLAYER_SIZE // 2 + TEAR_SIZE // 2)
+        tear_y = self.rect.centery + aim_dir.y * (PLAYER_SIZE // 2 + TEAR_SIZE // 2)
+
+        tear = Tear(tear_x, tear_y, aim_dir, self.tear_speed, self.tear_damage)
         self.new_tears.append(tear)
     
     def get_new_tears(self):
