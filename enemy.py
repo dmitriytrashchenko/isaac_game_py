@@ -1,6 +1,7 @@
 import pygame
 import random
 from constants import *
+from tear import EnemyTear
 
 class Enemy(pygame.sprite.Sprite):
     def __init__(self, x, y, enemy_type="basic"):
@@ -47,6 +48,9 @@ class Enemy(pygame.sprite.Sprite):
         
         # Движение
         self.velocity = pygame.math.Vector2(0, 0)
+
+        # Снаряды, выпущенные в этот кадр (собираются игрой через get_new_tears)
+        self.new_tears = []
 
     def update(self, dt, player_pos):
         if self.ai_type == "chase":
@@ -102,11 +106,32 @@ class Enemy(pygame.sprite.Sprite):
         # Обновление таймера стрельбы
         if hasattr(self, 'shoot_timer'):
             self.shoot_timer += dt
-        
+            if self.shoot_timer >= self.shoot_cooldown:
+                self._shoot_at(player_pos)
+                self.shoot_timer = 0
+
         # Применение движения
         self.rect.x += self.velocity.x * dt
         self.rect.y += self.velocity.y * dt
-    
+
+    def _shoot_at(self, player_pos):
+        direction = pygame.math.Vector2(
+            player_pos[0] - self.rect.centerx,
+            player_pos[1] - self.rect.centery
+        )
+        if direction.length() == 0:
+            return
+        direction = direction.normalize()
+
+        tear = EnemyTear(self.rect.centerx, self.rect.centery, direction, ENEMY_TEAR_SPEED, self.damage)
+        self.new_tears.append(tear)
+
+    def get_new_tears(self):
+        # Возвращает и очищает список новых снарядов
+        tears = self.new_tears.copy()
+        self.new_tears.clear()
+        return tears
+
     def _clamp_to_room(self):
         # Ограничение движения врага границами комнаты
         room_left = ROOM_OFFSET_X + WALL_THICKNESS

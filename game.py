@@ -32,6 +32,7 @@ class Game:
         self.all_sprites = pygame.sprite.Group()
         self.enemies = pygame.sprite.Group()
         self.tears = pygame.sprite.Group()
+        self.enemy_tears = pygame.sprite.Group()
         self.items = pygame.sprite.Group()
 
         # Добавляем игрока в группу спрайтов
@@ -52,6 +53,8 @@ class Game:
         for enemy in list(self.enemies):
             enemy.kill()
         for tear in list(self.tears):
+            tear.kill()
+        for tear in list(self.enemy_tears):
             tear.kill()
         for item in list(self.items):
             item.kill()
@@ -104,6 +107,11 @@ class Game:
         for enemy in self.enemies:
             enemy.update(dt, self.player.rect.center)
 
+            # Снаряды врагов-стрелков
+            for tear in enemy.get_new_tears():
+                self.all_sprites.add(tear)
+                self.enemy_tears.add(tear)
+
         # Обновление слёз
         for tear in self.tears:
             tear.update(dt)
@@ -115,6 +123,23 @@ class Game:
                 tear.rect.top > ROOM_OFFSET_Y + ROOM_HEIGHT or
                 tear.lifetime <= 0):
                 tear.kill()
+
+        # Обновление вражеских слёз
+        for tear in self.enemy_tears:
+            tear.update(dt)
+
+            if (tear.rect.right < ROOM_OFFSET_X or
+                tear.rect.left > ROOM_OFFSET_X + ROOM_WIDTH or
+                tear.rect.bottom < ROOM_OFFSET_Y or
+                tear.rect.top > ROOM_OFFSET_Y + ROOM_HEIGHT or
+                tear.lifetime <= 0):
+                tear.kill()
+
+        # Столкновения вражеских слёз с игроком
+        hit_by_enemy_tears = pygame.sprite.spritecollide(self.player, self.enemy_tears, True)
+        for tear in hit_by_enemy_tears:
+            if self.player.can_take_damage():
+                self.player.take_damage(tear.damage)
 
         # Столкновения слёз с врагами
         for tear in self.tears:
