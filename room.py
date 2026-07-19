@@ -3,6 +3,7 @@ import random
 from constants import *
 from enemy import Enemy
 from item import Item
+from chest import Chest
 
 class Room:
     def __init__(self, room_type=ROOM_TYPES['NORMAL']):
@@ -26,6 +27,10 @@ class Room:
         
         # Стены и препятствия
         self.walls = []
+
+        # Сундук после победы над боссом (см. maybe_spawn_chest)
+        self.chest = None
+        self.chest_rolled = False
         
         # Генерация базовых стен комнаты
         self._generate_walls()
@@ -103,6 +108,18 @@ class Room:
         boss.max_health = boss.health
         boss.damage += 1
         self.enemies.append(boss)
+
+    def maybe_spawn_chest(self):
+        """Вызывается при зачистке комнаты босса. Спавнит сундук рядом
+        с люком (один раз за комнату) с одним из 10 уровней редкости
+        приза внутри — см. chest.roll_tier()."""
+        if self.chest_rolled:
+            return
+        self.chest_rolled = True
+
+        cx = ROOM_OFFSET_X + ROOM_WIDTH // 2
+        cy = ROOM_OFFSET_Y + ROOM_HEIGHT // 2
+        self.chest = Chest(cx + 70, cy)
 
     def is_locked(self):
         """Комната заперта, если в ней изначально были враги и она ещё не зачищена"""

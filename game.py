@@ -5,6 +5,7 @@ from player import Player
 from enemy import Enemy
 from room import Room
 from item import Item
+from chest import TIER_COLORS
 from ui import UI
 from dungeon import Dungeon
 from transition import RoomTransition, DoorDetector
@@ -35,6 +36,7 @@ class Game:
         self.tears = pygame.sprite.Group()
         self.enemy_tears = pygame.sprite.Group()
         self.items = pygame.sprite.Group()
+        self.chests = pygame.sprite.Group()
 
         # Добавляем игрока в группу спрайтов
         self.all_sprites.add(self.player)
@@ -44,6 +46,11 @@ class Game:
         # Флаг: комната уже подменена в текущем переходе (срабатывает
         # один раз в момент полной черноты экрана, см. update())
         self._room_swapped_this_transition = False
+
+        # Всплывающая надпись о полученном призе (сундук-рулетка)
+        self.pickup_message = None
+        self.pickup_message_color = WHITE
+        self.pickup_message_timer = 0.0
 
     @property
     def current_room(self):
@@ -59,6 +66,8 @@ class Game:
             tear.kill()
         for item in list(self.items):
             item.kill()
+        for chest in list(self.chests):
+            chest.kill()
 
         # Живые враги комнаты (мёртвые из прошлого визита не воскрешаем)
         for enemy in self.current_room.enemies:
@@ -70,6 +79,11 @@ class Game:
         for item in self.current_room.items:
             self.all_sprites.add(item)
             self.items.add(item)
+
+        # Редкий сундук-рулетка (если уже был заспавнен при прошлом визите)
+        if self.current_room.chest:
+            self.all_sprites.add(self.current_room.chest)
+            self.chests.add(self.current_room.chest)
 
     def _get_stairs_rect(self):
         """Прямоугольник люка на следующий этаж (появляется в центре
@@ -115,6 +129,10 @@ class Game:
                 self._complete_room_transition(self.transition.direction)
                 self._room_swapped_this_transition = True
             return
+
+        # Обновление таймера всплывающей надписи о призе
+        if self.pickup_message_timer > 0:
+            self.pickup_message_timer -= dt
 
         # Обновление игрока
         self.player.update(dt)
@@ -205,6 +223,27 @@ class Game:
         if len(self.enemies) == 0 and len(self.current_room.enemies) > 0:
             self.current_room.cleared = True
 
+            # Комната босса только что зачищена — спавним сундук со случайным уровнем редкости приза (1-10)
+            if self.current_room.room_type == ROOM_TYPES['BOSS']:
+                self.current_room.maybe_spawn_chest()
+                if self.current_room.chest and self.current_room.chest not in self.chests:
+                    self.all_sprites.add(self.current_room.chest)
+                    self.chests.add(self.current_room.chest)
+
+        # Обновление и взаимодействие с сундуком-рулеткой
+        for chest in self.chests:
+            chest.update(dt)
+
+            if chest.state == "closed" and self.player.rect.colliderect(chest.rect):
+                chest.start_spin()
+
+            if chest.state == "opened" and not chest.reward_applied:
+                chest.apply_reward(self.player)
+                chest.reward_applied = True
+                self.pickup_message = f"{chest.reward_name}  (Tier {chest.tier}/10)"
+                self.pickup_message_color = TIER_COLORS[chest.tier - 1]
+                self.pickup_message_timer = 3.0
+
         # Комната босса зачищена — проверяем, не наступил ли игрок на люк
         if self.current_room.room_type == ROOM_TYPES['BOSS'] and self.current_room.cleared:
             if self.player.rect.colliderect(self._get_stairs_rect()):
@@ -294,8 +333,16 @@ class Game:
             # Отрисовка всех спрайтов
             self.all_sprites.draw(self.screen)
 
+            # Игрок всегда поверх остальных спрайтов (сундуков, предметов,
+            # врагов), иначе его перекрывает то, на чём он стоит
+            self.screen.blit(self.player.image, self.player.rect)
+
             # Отрисовка UI
             self.ui.draw(self.screen, self.player, self.floor)
+
+            # Всплывающая надпись о призе из сундука
+            if self.pickup_message_timer > 0:
+                self.ui.draw_pickup_message(self.screen, self.pickup_message, self.pickup_message_color)
 
             # Мини-карта подземелья
             self.ui.draw_minimap(self.screen, self.dungeon.get_minimap_data())

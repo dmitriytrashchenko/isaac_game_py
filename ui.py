@@ -127,6 +127,19 @@ class UI:
         continue_rect = continue_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 30))
         screen.blit(continue_text, continue_rect)
     
+    def draw_pickup_message(self, screen, text, color=WHITE):
+        """Крупная надпись о полученном призе (сундук-рулетка и т.п.),
+        держится на экране несколько секунд после получения."""
+        banner = self.font.render(text, True, color)
+        rect = banner.get_rect(midtop=(SCREEN_WIDTH // 2, 45))
+
+        bg = pygame.Surface((rect.width + 20, rect.height + 10))
+        bg.set_alpha(180)
+        bg.fill(BLACK)
+        bg_rect = bg.get_rect(center=rect.center)
+        screen.blit(bg, bg_rect)
+        screen.blit(banner, rect)
+
     def draw_room_transition(self, screen, progress):
         """Отрисовка перехода между комнатами"""
         # Эффект затемнения
