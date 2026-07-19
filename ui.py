@@ -76,6 +76,7 @@ class UI:
         controls = [
             "WASD - Move",
             "Arrows - Shoot",
+            "LMB (hold) - Shoot at mouse",
             "ESC - Pause"
         ]
         

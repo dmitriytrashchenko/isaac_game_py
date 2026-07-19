@@ -53,6 +53,10 @@ class Player(pygame.sprite.Sprite):
         }
         self.shoot_key_order = []
 
+        # Прицеливание мышью (альтернатива стрелкам): зажатая ЛКМ стреляет
+        # на все 360° в сторону курсора, а не только по 4 направлениям
+        self.mouse_aim_active = False
+
     def handle_event(self, event):
         if event.type == pygame.KEYDOWN:
             if event.key in self.keys_pressed:
@@ -64,6 +68,10 @@ class Player(pygame.sprite.Sprite):
                 self.keys_pressed[event.key] = False
             if event.key in self.shoot_key_order:
                 self.shoot_key_order.remove(event.key)
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            self.mouse_aim_active = True
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            self.mouse_aim_active = False
     
     def update(self, dt):
         # Обновление времени неуязвимости
@@ -113,14 +121,22 @@ class Player(pygame.sprite.Sprite):
         self.rect.y += self.velocity.y * dt
     
     def _handle_shooting(self, dt):
-        # Целимся по последней зажатой стрелке (как в оригинале)
         shoot_direction = None
-        if self.shoot_key_order:
+
+        # Мышь имеет приоритет над стрелками, если зажата ЛКМ — целится
+        # на все 360° в сторону курсора, а не только по 4 направлениям
+        if self.mouse_aim_active:
+            mouse_pos = pygame.math.Vector2(pygame.mouse.get_pos())
+            to_mouse = mouse_pos - pygame.math.Vector2(self.rect.center)
+            if to_mouse.length() > 0:
+                shoot_direction = to_mouse.normalize()
+        elif self.shoot_key_order:
+            # Целимся по последней зажатой стрелке (как в оригинале)
             last_key = self.shoot_key_order[-1]
             shoot_direction = self.shoot_key_to_direction[last_key]
 
         # Стрельба
-        if shoot_direction and self.last_shot >= self.tear_rate:
+        if shoot_direction is not None and self.last_shot >= self.tear_rate:
             self._shoot(shoot_direction)
             self.last_shot = 0
     
