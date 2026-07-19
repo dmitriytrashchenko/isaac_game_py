@@ -261,6 +261,9 @@ class Game:
             # Отрисовка UI
             self.ui.draw(self.screen, self.player)
 
+            # Мини-карта подземелья
+            self.ui.draw_minimap(self.screen, self.dungeon.get_minimap_data())
+
             # Затемнение при переходе между комнатами
             self.transition.draw_transition(self.screen)
 

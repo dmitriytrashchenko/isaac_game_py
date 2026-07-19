@@ -129,14 +129,38 @@ class UI:
         overlay.fill(BLACK)
         screen.blit(overlay, (0, 0))
     
-    def draw_minimap(self, screen, current_room, visited_rooms):
-        """Отрисовка мини-карты (для будущего расширения)"""
-        # Позиция мини-карты
-        minimap_x = SCREEN_WIDTH - 100
-        minimap_y = SCREEN_HEIGHT - 100
+    def draw_minimap(self, screen, minimap_data):
+        """Отрисовка мини-карты подземелья (только посещённые комнаты)"""
         room_size = 10
-        
-        # Текущая комната
-        current_rect = pygame.Rect(minimap_x, minimap_y, room_size, room_size)
-        pygame.draw.rect(screen, YELLOW, current_rect)
-        pygame.draw.rect(screen, WHITE, current_rect, 1)
+        room_gap = 3
+        minimap_x = SCREEN_WIDTH - 110
+        minimap_y = SCREEN_HEIGHT - 110
+
+        rooms = minimap_data['rooms']
+        visited = minimap_data['visited']
+        current = minimap_data['current']
+
+        room_colors = {
+            ROOM_TYPES['NORMAL']: GRAY,
+            ROOM_TYPES['TREASURE']: YELLOW,
+            ROOM_TYPES['BOSS']: RED,
+            ROOM_TYPES['SECRET']: (150, 0, 150)
+        }
+
+        for pos in visited:
+            if pos not in rooms:
+                continue
+
+            rel_x = pos[0] - current[0]
+            rel_y = pos[1] - current[1]
+            x = minimap_x + rel_x * (room_size + room_gap)
+            y = minimap_y + rel_y * (room_size + room_gap)
+
+            color = room_colors.get(rooms[pos], GRAY)
+            rect = pygame.Rect(x, y, room_size, room_size)
+            pygame.draw.rect(screen, color, rect)
+
+            if pos == current:
+                pygame.draw.rect(screen, WHITE, rect, 2)
+            else:
+                pygame.draw.rect(screen, DARK_GRAY, rect, 1)
