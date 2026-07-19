@@ -137,18 +137,20 @@ class Enemy(pygame.sprite.Sprite):
             self.rect.bottom = room_bottom
     
     def _update_color(self):
-        # Изменение цвета в зависимости от здоровья
+        # Изменение цвета в зависимости от здоровья: на полном ХП — чистый
+        # базовый цвет типа врага, по мере урона высветляется к белому
         health_ratio = self.health / self.max_health
-        
+        damage_ratio = 1 - health_ratio
+
         if self.enemy_type == "basic":
-            red_component = int(255 * health_ratio)
-            self.image.fill((255, red_component, red_component))
+            component = int(255 * damage_ratio)
+            self.image.fill((255, component, component))
         elif self.enemy_type == "shooter":
-            blue_component = int(255 * health_ratio)
-            self.image.fill((blue_component, blue_component, 255))
+            component = int(255 * damage_ratio)
+            self.image.fill((component, component, 255))
         elif self.enemy_type == "tank":
-            gray_component = int(128 * health_ratio + 127)
-            self.image.fill((gray_component, gray_component, gray_component))
+            component = int(128 + 127 * damage_ratio)
+            self.image.fill((component, component, component))
     
     def take_damage(self, damage):
         self.health -= damage
