@@ -134,7 +134,12 @@ class Game:
 
     def _kill_enemy_with_drop(self, enemy):
         """Убивает врага: базовый шанс 30% оставить предмет и 20% валюту
-        (глаз) — оба растут с Luck игрока, независимые роллы, вазы глаза не дают"""
+        (глаз) — оба растут с Luck игрока, независимые роллы, вазы глаза не дают.
+
+        Сундуки — два независимых источника:
+        - enhanced-враги (усиленная волна за разрушенные факелы) сундук
+          НЕ роняют поштучно — награда одна на всю волну (см. ниже)
+        - обычные враги роняют сундук очень редко (NORMAL_MOB_CHEST_CHANCE, 0.1%)"""
         self._spawn_hit_sparks(enemy.rect.center, enemy._current_color(), count=10)
         luck_bonus = self._luck_bonus()
         if random.random() < 0.3 + luck_bonus:
@@ -146,15 +151,25 @@ class Game:
             self.all_sprites.add(eye)
             self.currency.add(eye)
 
-        # Награда за челлендж "потуши все факелы" — усиленные враги (см.
-        # _spawn_enhanced_wave) с шансом ENHANCED_CHEST_CHANCE оставляют
-        # сундук редкости 1-5
-        if getattr(enemy, "enhanced", False) and random.random() < ENHANCED_CHEST_CHANCE + luck_bonus:
-            chest = Chest(enemy.rect.centerx, enemy.rect.centery, tier=random.randint(1, 5))
+        is_enhanced = getattr(enemy, "enhanced", False)
+
+        if not is_enhanced and random.random() < NORMAL_MOB_CHEST_CHANCE + luck_bonus:
+            chest = Chest(enemy.rect.centerx, enemy.rect.centery)
             self.all_sprites.add(chest)
             self.chests.add(chest)
 
         enemy.kill()
+
+        # Награда за челлендж "потуши все факелы" — один сундук на всю
+        # комнату, спавнится когда умирает ПОСЛЕДНИЙ enhanced-враг волны
+        # (enemy.kill() уже убрал текущего врага из self.enemies, поэтому
+        # достаточно проверить, остались ли ещё живые enhanced-враги)
+        if is_enhanced and self.current_room.enhanced_wave_pending:
+            if not any(getattr(e, "enhanced", False) for e in self.enemies):
+                chest = Chest(enemy.rect.centerx, enemy.rect.centery, tier=random.randint(1, 5))
+                self.all_sprites.add(chest)
+                self.chests.add(chest)
+                self.current_room.enhanced_wave_pending = False
 
     def _destroy_vase(self, vase):
         """Разбивает вазу: искры + шанс 40% оставить предмет (глаза с
@@ -182,11 +197,22 @@ class Game:
             self._spawn_enhanced_wave()
 
     def _spawn_enhanced_wave(self):
-        """Усиленные версии обычных врагов комнаты (награда за потушенные
-        факелы) — выше здоровье/урон, помечены enemy.enhanced для шанса
-        ENHANCED_CHEST_CHANCE выронить сундук редкости 1-5 при смерти
-        (см. _kill_enemy_with_drop). Комната запирается заново, пока волна
-        не будет зачищена — см. constants.py / Balance_Parameters.md"""
+        """Усиленные версии обычных врагов комнаты (награда/наказание за
+        потушенные факелы) — выше здоровье/урон, помечены enemy.enhanced.
+        Награда за зачистку всей волны — один сундук редкости 1-5 на
+        комнату (см. _kill_enemy_with_drop), не с каждого врага поштучно.
+        Комната запирается заново, пока волна не будет зачищена.
+
+        Здоровье волны зависит от тайминга разрушения факелов: если игрок
+        потушил их уже ПОСЛЕ того, как зачистил обычных врагов комнаты —
+        x2 хп (ENHANCED_HEALTH_MULT). Если потушил факелы, пока обычные
+        враги комнаты ещё живы — x3 хп (ENHANCED_HEALTH_MULT_EARLY),
+        рискованнее для игрока, поэтому награда серьёзнее.
+        См. constants.py / Balance_Parameters.md"""
+        room = self.current_room
+        early = len(self.enemies) > 0
+        health_mult = ENHANCED_HEALTH_MULT_EARLY if early else ENHANCED_HEALTH_MULT
+
         enemy_types = ["basic", "shooter", "tank", "fast", "brute"]
         weights = [35, 25, 10, 20, 10]
         count = random.randint(ENHANCED_WAVE_MIN, ENHANCED_WAVE_MAX)
@@ -201,7 +227,7 @@ class Game:
 
             enemy_type = random.choices(enemy_types, weights=weights, k=1)[0]
             enemy = Enemy(x, y, enemy_type)
-            enemy.health = int(enemy.health * ENHANCED_HEALTH_MULT) or 1
+            enemy.health = int(enemy.health * health_mult) or 1
             enemy.max_health = enemy.health
             enemy.damage = round(enemy.damage * ENHANCED_DAMAGE_MULT, 1)
             enemy.enhanced = True
@@ -209,9 +235,38 @@ class Game:
 
             self.all_sprites.add(enemy)
             self.enemies.add(enemy)
-            self.current_room.enemies.append(enemy)
+            room.enemies.append(enemy)
 
-        self.current_room.cleared = False
+        # В комнате босса разрушение факелов дополнительно призывает
+        # ещё одного босса (x2 хп от обычного) — не просто рядовых врагов
+        if room.room_type == ROOM_TYPES['BOSS']:
+            self._spawn_enhanced_boss()
+
+        room.enhanced_wave_pending = True
+        room.cleared = False
+
+    def _spawn_enhanced_boss(self):
+        """Доп. босс, вызванный челленджем разрушения факелов в босс-комнате.
+        Строится так же, как обычный первый босс (Room.generate_boss —
+        усиленный "tank"), но с ещё x2 хп сверху (ENHANCED_BOSS_HEALTH_MULT)."""
+        for _attempt in range(30):
+            x = random.randint(ROOM_OFFSET_X + 50, ROOM_OFFSET_X + ROOM_WIDTH - 50)
+            y = random.randint(ROOM_OFFSET_Y + 50, ROOM_OFFSET_Y + ROOM_HEIGHT - 50)
+            dx, dy = x - self.player.rect.centerx, y - self.player.rect.centery
+            if (dx * dx + dy * dy) ** 0.5 >= 150:
+                break
+
+        boss = Enemy(x, y, "tank")
+        boss.health *= 3  # как обычный первый босс — см. Room.generate_boss
+        boss.damage += 1
+        boss.health = int(boss.health * ENHANCED_BOSS_HEALTH_MULT)
+        boss.max_health = boss.health
+        boss.enhanced = True
+        boss._render()
+
+        self.all_sprites.add(boss)
+        self.enemies.add(boss)
+        self.current_room.enemies.append(boss)
 
     def _resolve_static_obstacle_collisions(self):
         """Простое выталкивание игрока из целых ваз и колонн по оси

@@ -51,6 +51,9 @@ class Room:
         self.torches = None
         # Сработало ли уже событие "все факелы потушены" (см. Game._check_torch_challenge)
         self.torch_challenge_triggered = False
+        # Идёт ли сейчас усиленная волна за разрушенные факелы — пока True,
+        # награда (один сундук на комнату) ждёт зачистки ВСЕХ enhanced-врагов
+        self.enhanced_wave_pending = False
 
         # random с отдельным сидом на комнату — используется для стен,
         # пола, тона палитры: одна комната выглядит целостно, но отличается
