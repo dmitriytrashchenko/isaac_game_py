@@ -2,7 +2,7 @@
 type: reference
 date: 2026-07-21
 tags: [balance, constants, drops, enemies, chest, torch]
-related: [[Changelog]], [[Known_Issues]], [[Session_2026-07-20_Visual_Overhaul]], [[Enemies]]
+related: [[Changelog]], [[Known_Issues]], [[Session_2026-07-20_Visual_Overhaul]], [[Session_2026-07-21_Torch_Challenge_Stats]], [[Enemies]]
 ---
 
 # Balance Parameters — справочник всех процентов/множителей игры

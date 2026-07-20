@@ -2,7 +2,7 @@
 type: reference
 date: 2026-07-21
 tags: [enemies, balance]
-related: [[Balance_Parameters]], [[Setting]], [[Changelog]]
+related: [[Balance_Parameters]], [[Setting]], [[Changelog]], [[Session_2026-07-21_Torch_Challenge_Stats]]
 ---
 
 # Enemies — справочник всех типов врагов
