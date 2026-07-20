@@ -189,9 +189,11 @@ class Dungeon:
             # Генерируем врагов для новой комнаты, подальше от двери, через
             # которую войдёт игрок, чтобы не спавнить их у него под ногами
             if self.current_room.room_type == ROOM_TYPES['NORMAL']:
-                enemy_count = random.randint(2, 5)
+                enemy_count = random.randint(4, 8)
                 entry_pos = self._get_entry_position(direction)
                 self.current_room.generate_enemies(enemy_count, avoid_pos=entry_pos, min_distance=150)
+                self.current_room.generate_vases(random.randint(1, 3), avoid_pos=entry_pos)
+                self.current_room.maybe_add_pillars()
             elif self.current_room.room_type == ROOM_TYPES['TREASURE']:
                 # В комнате сокровищ нет врагов, но есть предмет
                 self.current_room.generate_treasure()

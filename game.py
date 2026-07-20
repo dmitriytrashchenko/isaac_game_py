@@ -10,14 +10,14 @@ from chest import TIER_COLORS
 from ui import UI
 from dungeon import Dungeon
 from transition import RoomTransition, DoorDetector
+from currency import Eye
+import particles
 
 class Game:
     def __init__(self, screen, hero=None):
         self.screen = screen
-        # Выбранный на экране выбора героя персонаж (см. menu.py). Пока
-        # влияет только на отображаемое имя — уникальная механика классов
-        # (ближний бой Воина, файрболы Мага) ещё не реализована, все три
-        # героя физически играются как Лучник. См. Setting.md.
+        # Выбранный на экране выбора героя персонаж (см. menu.py) — задаёт
+        # оружие/механику боя игрока (Player.weapon). См. Setting.md.
         self.hero = hero
         self._reset()
 
@@ -46,6 +46,9 @@ class Game:
         self.items = pygame.sprite.Group()
         self.chests = pygame.sprite.Group()
         self.effects = pygame.sprite.Group()  # чисто визуальные, без коллизий (вспышка удара мечом)
+        self.particles = pygame.sprite.Group()  # искры факелов, вспышки попаданий
+        self.vases = pygame.sprite.Group()
+        self.currency = pygame.sprite.Group()
 
         # Добавляем игрока в группу спрайтов
         self.all_sprites.add(self.player)
@@ -60,6 +63,22 @@ class Game:
         self.pickup_message = None
         self.pickup_message_color = WHITE
         self.pickup_message_timer = 0.0
+
+        # Время с начала забега — используется для мерцания факелов
+        self.elapsed_time = 0.0
+
+        # Периодический спавн искр-угольков от факелов
+        self.ember_timer = 0.0
+        self.ember_interval = 0.12
+
+        # Тряска камеры при уроне/победе над боссом
+        self.shake_timer = 0.0
+        self.shake_duration = 0.0
+        self.shake_magnitude = 0.0
+
+        # Буфер для отрисовки игрового мира отдельно от UI — тряска
+        # камеры сдвигает только его, UI остаётся неподвижным
+        self.world_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
 
     @property
     def current_room(self):
@@ -79,6 +98,12 @@ class Game:
             chest.kill()
         for effect in list(self.effects):
             effect.kill()
+        for particle in list(self.particles):
+            particle.kill()
+        for vase in list(self.vases):
+            vase.kill()
+        for currency in list(self.currency):
+            currency.kill()
 
         # Живые враги комнаты (мёртвые из прошлого визита не воскрешаем)
         for enemy in self.current_room.enemies:
@@ -91,18 +116,89 @@ class Game:
             self.all_sprites.add(item)
             self.items.add(item)
 
+        # Целые вазы комнаты (разбитые из прошлого визита не восстанавливаем)
+        for vase in self.current_room.vases:
+            if not vase.destroyed:
+                self.all_sprites.add(vase)
+                self.vases.add(vase)
+
         # Редкий сундук-рулетка (если уже был заспавнен при прошлом визите)
         if self.current_room.chest:
             self.all_sprites.add(self.current_room.chest)
             self.chests.add(self.current_room.chest)
 
     def _kill_enemy_with_drop(self, enemy):
-        """Убивает врага, с шансом 30% оставляя предмет на его месте"""
+        """Убивает врага: шанс 30% оставить предмет, отдельно шанс 20%
+        оставить валюту (глаз) — независимые роллы, вазы глаза не дают"""
+        self._spawn_hit_sparks(enemy.rect.center, enemy._current_color(), count=10)
         if random.random() < 0.3:
             item = Item(enemy.rect.centerx, enemy.rect.centery)
             self.all_sprites.add(item)
             self.items.add(item)
+        if random.random() < 0.2:
+            eye = Eye(enemy.rect.centerx, enemy.rect.centery, amount=1)
+            self.all_sprites.add(eye)
+            self.currency.add(eye)
         enemy.kill()
+
+    def _destroy_vase(self, vase):
+        """Разбивает вазу: искры + шанс 40% оставить предмет (глаза с
+        ваз не выпадают — только с врагов, см. _kill_enemy_with_drop)"""
+        vase.destroyed = True
+        self._spawn_hit_sparks(vase.rect.center, vase.shard_color, count=8)
+
+        if random.random() < 0.4:
+            item = Item(vase.rect.centerx, vase.rect.centery)
+            self.all_sprites.add(item)
+            self.items.add(item)
+
+        vase.kill()
+
+    def _resolve_static_obstacle_collisions(self):
+        """Простое выталкивание игрока из целых ваз и колонн по оси
+        наименьшего перекрытия — оба типа физически блокируют проход"""
+        obstacle_rects = [vase.rect for vase in self.vases] + list(self.current_room.pillars)
+
+        for obstacle_rect in obstacle_rects:
+            if not self.player.rect.colliderect(obstacle_rect):
+                continue
+
+            dx1 = obstacle_rect.right - self.player.rect.left
+            dx2 = self.player.rect.right - obstacle_rect.left
+            dy1 = obstacle_rect.bottom - self.player.rect.top
+            dy2 = self.player.rect.bottom - obstacle_rect.top
+            overlap_x = min(dx1, dx2)
+            overlap_y = min(dy1, dy2)
+
+            if overlap_x < overlap_y:
+                if dx1 < dx2:
+                    self.player.rect.left = obstacle_rect.right
+                else:
+                    self.player.rect.right = obstacle_rect.left
+            else:
+                if dy1 < dy2:
+                    self.player.rect.top = obstacle_rect.bottom
+                else:
+                    self.player.rect.bottom = obstacle_rect.top
+
+    def _spawn_hit_sparks(self, pos, color, count=6):
+        for spark in particles.spawn_hit_sparks(pos, color, count):
+            self.all_sprites.add(spark)
+            self.particles.add(spark)
+
+    def _trigger_shake(self, magnitude, duration):
+        """Тряска камеры (мира, не UI) — суммируется, если уже трясётся"""
+        self.shake_magnitude = max(self.shake_magnitude, magnitude)
+        self.shake_timer = max(self.shake_timer, duration)
+        self.shake_duration = max(self.shake_duration, duration)
+
+    def _get_shake_offset(self):
+        if self.shake_timer <= 0:
+            return (0, 0)
+        progress = self.shake_timer / self.shake_duration if self.shake_duration else 0
+        magnitude = self.shake_magnitude * progress
+        return (random.randint(-int(magnitude), int(magnitude)),
+                random.randint(-int(magnitude), int(magnitude)))
 
     def _get_stairs_rect(self):
         """Прямоугольник люка на следующий этаж (появляется в центре
@@ -153,6 +249,21 @@ class Game:
         if self.pickup_message_timer > 0:
             self.pickup_message_timer -= dt
 
+        # Время забега (мерцание факелов) и тряска камеры
+        self.elapsed_time += dt
+        if self.shake_timer > 0:
+            self.shake_timer -= dt
+
+        # Периодический спавн искр-угольков от факелов текущей комнаты
+        self.ember_timer += dt
+        torches = self.current_room.get_torch_positions()
+        if self.ember_timer >= self.ember_interval and torches:
+            self.ember_timer = 0.0
+            torch = random.choice(torches)
+            ember = particles.spawn_ember((torch[0], torch[1] - 12))
+            self.all_sprites.add(ember)
+            self.particles.add(ember)
+
         # Обновление игрока
         self.player.update(dt)
 
@@ -172,6 +283,13 @@ class Game:
                     enemy.take_damage(swing["damage"])
                     if enemy.health <= 0:
                         self._kill_enemy_with_drop(enemy)
+                    else:
+                        self._spawn_hit_sparks(enemy.rect.center, enemy._current_color(), count=4)
+            for vase in list(self.vases):
+                if swing_rect.colliderect(vase.rect):
+                    vase.take_damage(swing["damage"])
+                    if vase.health <= 0:
+                        self._destroy_vase(vase)
 
             slash = MeleeSwing(swing["pos"])
             self.all_sprites.add(slash)
@@ -186,10 +304,19 @@ class Game:
                 self.all_sprites.add(tear)
                 self.enemy_tears.add(tear)
 
-        # Обновление визуальных эффектов (вспышка удара мечом), сами
-        # себя удаляют по истечении lifetime в update()
+        # Обновление визуальных эффектов (вспышка удара мечом) и частиц
+        # (искры факелов, вспышки попаданий) — сами себя удаляют по
+        # истечении lifetime в update()
         for effect in list(self.effects):
             effect.update(dt)
+        for particle in list(self.particles):
+            particle.update(dt)
+
+        # Анимация парения предметов/валюты
+        for item in self.items:
+            item.update(dt)
+        for eye in self.currency:
+            eye.update(dt)
 
         # Обновление слёз
         for tear in self.tears:
@@ -219,6 +346,7 @@ class Game:
         for tear in hit_by_enemy_tears:
             if self.player.can_take_damage():
                 self.player.take_damage(tear.damage)
+                self._trigger_shake(6, 0.2)
 
         # Столкновения слёз с врагами
         for tear in self.tears:
@@ -229,12 +357,39 @@ class Game:
 
                 if enemy.health <= 0:
                     self._kill_enemy_with_drop(enemy)
+                else:
+                    self._spawn_hit_sparks(enemy.rect.center, enemy._current_color(), count=4)
+
+        # Столкновения слёз с вазами
+        for tear in self.tears:
+            hit_vases = pygame.sprite.spritecollide(tear, self.vases, False)
+            for vase in hit_vases:
+                vase.take_damage(tear.damage)
+                tear.kill()
+                if vase.health <= 0:
+                    self._destroy_vase(vase)
+
+        # Игрок физически не проходит сквозь целые вазы и колонны
+        self._resolve_static_obstacle_collisions()
 
         # Столкновения игрока с врагами
         hit_enemies = pygame.sprite.spritecollide(self.player, self.enemies, False)
         for enemy in hit_enemies:
             if self.player.can_take_damage():
                 self.player.take_damage(enemy.damage)
+                self._trigger_shake(6, 0.2)
+
+        # Враги иногда воруют предметы: наступив на предмет, с шансом 25%
+        # забирают бафф себе вместо игрока (и предмет пропадает)
+        for enemy in list(self.enemies):
+            looted = pygame.sprite.spritecollide(enemy, self.items, False)
+            for item in looted:
+                if random.random() < 0.25:
+                    enemy.apply_item_effect(item.item_type)
+                    self._spawn_hit_sparks(item.rect.center, enemy._current_color(), count=5)
+                    if item in self.current_room.items:
+                        self.current_room.items.remove(item)
+                    item.kill()
 
         # Столкновения игрока с предметами
         collected_items = pygame.sprite.spritecollide(self.player, self.items, True)
@@ -244,6 +399,11 @@ class Game:
             if item in self.current_room.items:
                 self.current_room.items.remove(item)
 
+        # Столкновения игрока с валютой (глаза)
+        collected_currency = pygame.sprite.spritecollide(self.player, self.currency, True)
+        for eye in collected_currency:
+            self.player.add_eyes(eye.amount)
+
         # Проверка границ комнаты для игрока (с учётом открытых дверей)
         self._check_room_boundaries()
 
@@ -252,12 +412,16 @@ class Game:
             self.state = "game_over"
             return
 
-        # Проверка очистки комнаты
-        if len(self.enemies) == 0 and len(self.current_room.enemies) > 0:
+        # Проверка очистки комнаты — "not self.current_room.cleared" тут
+        # обязателен: без него это условие оставалось бы истинным КАЖДЫЙ
+        # кадр после зачистки (враги не воскресают), и тряска ниже
+        # запускалась бы бесконечно вместо одного раза
+        if len(self.enemies) == 0 and len(self.current_room.enemies) > 0 and not self.current_room.cleared:
             self.current_room.cleared = True
 
             # Комната босса только что зачищена — спавним сундук со случайным уровнем редкости приза (1-10)
             if self.current_room.room_type == ROOM_TYPES['BOSS']:
+                self._trigger_shake(14, 0.4)
                 self.current_room.maybe_spawn_chest()
                 if self.current_room.chest and self.current_room.chest not in self.chests:
                     self.all_sprites.add(self.current_room.chest)
@@ -355,20 +519,26 @@ class Game:
         self.screen.fill(BLACK)
 
         if self.state == "playing":
-            # Отрисовка комнаты
-            self.current_room.draw(self.screen)
+            # Мир (комната + спрайты) рисуется в отдельный буфер, который
+            # затем блитится со сдвигом тряски камеры — UI остаётся
+            # неподвижным и не трясётся вместе с миром
+            self.world_surface.fill(BLACK)
+
+            self.current_room.draw(self.world_surface, self.elapsed_time)
 
             # Люк на следующий этаж, если босс побеждён
             if self.current_room.room_type == ROOM_TYPES['BOSS'] and self.current_room.cleared:
-                pygame.draw.rect(self.screen, (80, 0, 120), self._get_stairs_rect())
-                pygame.draw.rect(self.screen, WHITE, self._get_stairs_rect(), 2)
+                pygame.draw.rect(self.world_surface, (80, 0, 120), self._get_stairs_rect())
+                pygame.draw.rect(self.world_surface, WHITE, self._get_stairs_rect(), 2)
 
             # Отрисовка всех спрайтов
-            self.all_sprites.draw(self.screen)
+            self.all_sprites.draw(self.world_surface)
 
             # Игрок всегда поверх остальных спрайтов (сундуков, предметов,
             # врагов), иначе его перекрывает то, на чём он стоит
-            self.screen.blit(self.player.image, self.player.rect)
+            self.world_surface.blit(self.player.image, self.player.rect)
+
+            self.screen.blit(self.world_surface, self._get_shake_offset())
 
             # Отрисовка UI
             hero_name = self.hero["name"] if self.hero else None

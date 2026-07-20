@@ -1,5 +1,6 @@
 import pygame
 from constants import *
+from player import render_character_silhouette
 
 # Три героя на выбор (см. Setting.md). "weapon" определяет стиль атаки
 # в Player: "bow" — дальний бой стрелами (Лучник, базовая механика),
@@ -241,9 +242,10 @@ class HeroSelectMenu:
             pygame.draw.rect(screen, DARK_GRAY, rect)
             pygame.draw.rect(screen, GOLD if selected else GRAY, rect, 4 if selected else 2)
 
-            icon_rect = pygame.Rect(0, 0, 60, 60)
-            icon_rect.center = (rect.centerx, rect.top + 60)
-            pygame.draw.rect(screen, hero["color"], icon_rect)
+            icon = render_character_silhouette(hero["weapon"], hero["color"], PLAYER_SIZE)
+            icon = pygame.transform.scale(icon, (PLAYER_SIZE * 2, PLAYER_SIZE * 2))
+            icon_rect = icon.get_rect(center=(rect.centerx, rect.top + 60))
+            screen.blit(icon, icon_rect)
 
             name = self.name_font.render(hero["name"], True, WHITE)
             screen.blit(name, name.get_rect(center=(rect.centerx, rect.top + 120)))

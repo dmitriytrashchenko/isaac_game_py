@@ -1,16 +1,21 @@
 import pygame
 import random
+import math
 from constants import *
 from enemy import Enemy
 from item import Item
 from chest import Chest
+from vase import Vase
+
+TORCH_MARGIN = 30
+
 
 class Room:
     def __init__(self, room_type=ROOM_TYPES['NORMAL']):
         self.room_type = room_type
         self.cleared = False
         self.visited = False
-        
+
         # Двери (вверх, вниз, влево, вправо)
         self.doors = {
             'up': False,
@@ -18,50 +23,125 @@ class Room:
             'left': False,
             'right': False
         }
-        
+
         # Враги в комнате
         self.enemies = []
-        
+
         # Предметы в комнате
         self.items = []
-        
+
         # Стены и препятствия
         self.walls = []
+
+        # Разрушаемые вазы-препятствия (аналог горшков из Isaac)
+        self.vases = []
+
+        # Колонны — неразрушимые препятствия, дают части комнат разную
+        # планировку без изменения формы самой комнаты (см. maybe_add_pillars)
+        self.pillars = []
 
         # Сундук после победы над боссом (см. maybe_spawn_chest)
         self.chest = None
         self.chest_rolled = False
-        
+
+        # Позиции факелов генерируются лениво в get_torch_positions() —
+        # после того, как двери уже расставлены (иначе факел может
+        # оказаться прямо в дверном проёме)
+        self.torch_positions = None
+
+        # random с отдельным сидом на комнату — используется для стен,
+        # пола, тона палитры: одна комната выглядит целостно, но отличается
+        # от соседних. Текстуры кэшируются (не пересчитываются в draw()),
+        # чтобы не мерцали между кадрами
+        self._rng = random.Random(id(self))
+        self._tint = tuple(self._rng.randint(-25, 25) for _ in range(3))
+
         # Генерация базовых стен комнаты
         self._generate_walls()
-    
+        self.floor_texture = self._generate_floor_texture()
+
+    def _tinted(self, base_color):
+        return tuple(max(0, min(255, c + t)) for c, t in zip(base_color, self._tint))
+
+    def maybe_add_pillars(self):
+        """С шансом 40% расставляет 2 или 4 колонны симметрично вокруг
+        центра — даёт части обычных комнат другую планировку прохода"""
+        self.pillars = []
+        if self._rng.random() >= 0.4:
+            return
+
+        cx = ROOM_OFFSET_X + ROOM_WIDTH // 2
+        cy = ROOM_OFFSET_Y + ROOM_HEIGHT // 2
+        offset_x, offset_y = 110, 80
+        size = 28
+
+        corners = [(-offset_x, -offset_y), (offset_x, -offset_y), (-offset_x, offset_y), (offset_x, offset_y)]
+        if self._rng.random() < 0.5:
+            corners = corners[:2]  # только верхние две — асимметричный вариант
+
+        for dx, dy in corners:
+            rect = pygame.Rect(0, 0, size, size)
+            rect.center = (cx + dx, cy + dy)
+            self.pillars.append(rect)
+
     def _generate_walls(self):
-        # Генерация стен по периметру комнаты
+        rng = self._rng
+        wall_base = self._tinted(BROWN)
+
+        self.wall_colors = []
+
+        def add_wall(rect):
+            self.walls.append(rect)
+            shade = rng.randint(-15, 15)
+            self.wall_colors.append(tuple(max(0, min(255, c + shade)) for c in wall_base))
+
         # Верхняя стена
         for x in range(ROOM_OFFSET_X, ROOM_OFFSET_X + ROOM_WIDTH, TILE_SIZE):
-            wall_rect = pygame.Rect(x, ROOM_OFFSET_Y, TILE_SIZE, WALL_THICKNESS)
-            self.walls.append(wall_rect)
-        
+            add_wall(pygame.Rect(x, ROOM_OFFSET_Y, TILE_SIZE, WALL_THICKNESS))
+
         # Нижняя стена
         for x in range(ROOM_OFFSET_X, ROOM_OFFSET_X + ROOM_WIDTH, TILE_SIZE):
-            wall_rect = pygame.Rect(x, ROOM_OFFSET_Y + ROOM_HEIGHT - WALL_THICKNESS, TILE_SIZE, WALL_THICKNESS)
-            self.walls.append(wall_rect)
-        
+            add_wall(pygame.Rect(x, ROOM_OFFSET_Y + ROOM_HEIGHT - WALL_THICKNESS, TILE_SIZE, WALL_THICKNESS))
+
         # Левая стена
         for y in range(ROOM_OFFSET_Y, ROOM_OFFSET_Y + ROOM_HEIGHT, TILE_SIZE):
-            wall_rect = pygame.Rect(ROOM_OFFSET_X, y, WALL_THICKNESS, TILE_SIZE)
-            self.walls.append(wall_rect)
-        
+            add_wall(pygame.Rect(ROOM_OFFSET_X, y, WALL_THICKNESS, TILE_SIZE))
+
         # Правая стена
         for y in range(ROOM_OFFSET_Y, ROOM_OFFSET_Y + ROOM_HEIGHT, TILE_SIZE):
-            wall_rect = pygame.Rect(ROOM_OFFSET_X + ROOM_WIDTH - WALL_THICKNESS, y, WALL_THICKNESS, TILE_SIZE)
-            self.walls.append(wall_rect)
+            add_wall(pygame.Rect(ROOM_OFFSET_X + ROOM_WIDTH - WALL_THICKNESS, y, WALL_THICKNESS, TILE_SIZE))
+
+    def _generate_floor_texture(self):
+        """Каменный пол плиткой со случайным (но кэшированным — не мерцает)
+        оттенком каждой плитки и тёмной затиркой между ними. Общий тон
+        (self._tint) делает пол одной комнаты цельным по палитре, но
+        отличным от соседних комнат."""
+        surface = pygame.Surface((ROOM_WIDTH, ROOM_HEIGHT))
+        rng = self._rng
+        floor_base = self._tinted(DARK_GRAY)
+        grout = tuple(max(0, c - 20) for c in floor_base)
+
+        for ty in range(0, ROOM_HEIGHT, TILE_SIZE):
+            for tx in range(0, ROOM_WIDTH, TILE_SIZE):
+                shade = rng.randint(-10, 10)
+                color = tuple(max(0, min(255, c + shade)) for c in floor_base)
+                pygame.draw.rect(surface, color, (tx, ty, TILE_SIZE, TILE_SIZE))
+                pygame.draw.rect(surface, grout, (tx, ty, TILE_SIZE, TILE_SIZE), 1)
+
+                # Редкие декоративные детали (трещины/мох) — разнообразят
+                # пустой пол без влияния на геймплей
+                if rng.random() < 0.04:
+                    speck = tuple(max(0, c - 30) for c in color)
+                    pygame.draw.line(surface, speck, (tx + 4, ty + 4), (tx + TILE_SIZE - 6, ty + TILE_SIZE - 8), 1)
+
+        return surface
     
     def generate_enemies(self, count, avoid_pos=None, min_distance=150):
         """Генерация врагов в комнате, подальше от точки входа игрока (avoid_pos)"""
         self.enemies.clear()
 
-        enemy_types = ["basic", "shooter", "tank"]
+        enemy_types = ["basic", "shooter", "tank", "fast", "brute"]
+        enemy_weights = [35, 25, 10, 20, 10]
 
         for _ in range(count):
             # Случайная позиция в комнате (избегаем стен и точки входа игрока)
@@ -82,16 +162,44 @@ class Room:
                 # Не нашли позицию подальше за 30 попыток — берём последнюю как есть
                 x, y = candidate_x, candidate_y
 
-            # Случайный тип врага
-            enemy_type = random.choice(enemy_types)
-
-            # Уменьшаем шанс появления танка
-            if enemy_type == "tank" and random.random() > 0.3:
-                enemy_type = "basic"
+            # Случайный тип врага (танк/громила реже, крыса-разведчик почаще)
+            enemy_type = random.choices(enemy_types, weights=enemy_weights, k=1)[0]
 
             enemy = Enemy(x, y, enemy_type)
             self.enemies.append(enemy)
-    
+
+    def generate_vases(self, count, avoid_pos=None, min_distance=100):
+        """Расставляет разрушаемые вазы по комнате (аналог горшков Isaac),
+        подальше друг от друга и от точки входа игрока"""
+        self.vases.clear()
+        margin = 60
+        placed = []
+
+        for _ in range(count):
+            x, y = None, None
+            for _attempt in range(30):
+                candidate_x = random.randint(ROOM_OFFSET_X + margin, ROOM_OFFSET_X + ROOM_WIDTH - margin)
+                candidate_y = random.randint(ROOM_OFFSET_Y + margin, ROOM_OFFSET_Y + ROOM_HEIGHT - margin)
+
+                if avoid_pos is not None:
+                    dx, dy = candidate_x - avoid_pos[0], candidate_y - avoid_pos[1]
+                    if (dx * dx + dy * dy) ** 0.5 < min_distance:
+                        continue
+
+                too_close = any(
+                    ((candidate_x - px) ** 2 + (candidate_y - py) ** 2) ** 0.5 < min_distance
+                    for px, py in placed
+                )
+                if not too_close:
+                    x, y = candidate_x, candidate_y
+                    break
+
+            if x is None:
+                continue  # не нашли свободное место за 30 попыток — пропускаем эту вазу
+
+            placed.append((x, y))
+            self.vases.append(Vase(x, y))
+
     def generate_treasure(self):
         """Генерация сокровища в комнате"""
         center_x = ROOM_OFFSET_X + ROOM_WIDTH // 2
@@ -135,16 +243,98 @@ class Room:
         if direction in self.doors:
             self.doors[direction] = False
     
-    def draw(self, screen):
+    def get_torch_positions(self):
+        """Позиции факелов — генерируются один раз лениво (после того,
+        как двери уже расставлены дандженом) и кэшируются"""
+        if self.torch_positions is None:
+            self.torch_positions = self._generate_torch_positions()
+        return self.torch_positions
+
+    def _generate_torch_positions(self):
+        """2-4 факела на случайных местах вдоль стен (не только по углам),
+        с отступом от дверных проёмов и друг от друга"""
+        rng = self._rng
+        count = rng.randint(2, 4)
+        positions = []
+        door_gap = 45
+
+        for _attempt in range(50):
+            if len(positions) >= count:
+                break
+
+            side = rng.choice(['up', 'down', 'left', 'right'])
+            if side in ('up', 'down'):
+                x = rng.randint(ROOM_OFFSET_X + TORCH_MARGIN, ROOM_OFFSET_X + ROOM_WIDTH - TORCH_MARGIN)
+                y = ROOM_OFFSET_Y + TORCH_MARGIN if side == 'up' else ROOM_OFFSET_Y + ROOM_HEIGHT - TORCH_MARGIN
+                door_center = ROOM_OFFSET_X + ROOM_WIDTH // 2
+                coord_on_wall = x
+            else:
+                y = rng.randint(ROOM_OFFSET_Y + TORCH_MARGIN, ROOM_OFFSET_Y + ROOM_HEIGHT - TORCH_MARGIN)
+                x = ROOM_OFFSET_X + TORCH_MARGIN if side == 'left' else ROOM_OFFSET_X + ROOM_WIDTH - TORCH_MARGIN
+                door_center = ROOM_OFFSET_Y + ROOM_HEIGHT // 2
+                coord_on_wall = y
+
+            if self.doors[side] and abs(coord_on_wall - door_center) < door_gap:
+                continue
+            if any(((x - px) ** 2 + (y - py) ** 2) ** 0.5 < 80 for px, py in positions):
+                continue
+
+            positions.append((x, y))
+
+        return positions
+
+    def _draw_torch(self, screen, pos, time, phase=0.0):
+        """Тёплое аддитивное свечение факела — компактное и мягкое
+        (раньше было слишком большим и плоским, выглядело как оранжевое
+        пятно) + скоба на стене с мерцающим двухслойным пламенем"""
+        flicker = math.sin(time * 9 + phase) * 2 + math.sin(time * 23 + phase) * 1
+
+        radius = int(30 + flicker)
+        glow = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+        for r in range(radius, 0, -6):
+            pygame.draw.circle(glow, (255, 140, 40, 16), (radius, radius), r)
+        screen.blit(glow, (pos[0] - radius, pos[1] - radius), special_flags=pygame.BLEND_RGBA_ADD)
+
+        # Скоба-держатель на стене
+        pygame.draw.rect(screen, (60, 40, 20), (pos[0] - 2, pos[1] - 2, 4, 12))
+
+        # Пламя: внешний слой (оранжевый) + внутренний более яркий (почти белый)
+        flame_h = 8 + flicker
+        pygame.draw.polygon(screen, (255, 190, 70), [
+            (pos[0], pos[1] - 6 - flame_h),
+            (pos[0] - 4, pos[1] - 3),
+            (pos[0] + 4, pos[1] - 3),
+        ])
+        pygame.draw.polygon(screen, (255, 245, 190), [
+            (pos[0], pos[1] - 4 - flame_h * 0.55),
+            (pos[0] - 2, pos[1] - 3),
+            (pos[0] + 2, pos[1] - 3),
+        ])
+
+    def draw(self, screen, time=0.0):
         """Отрисовка комнаты"""
-        # Заливка фона комнаты
         room_rect = pygame.Rect(ROOM_OFFSET_X, ROOM_OFFSET_Y, ROOM_WIDTH, ROOM_HEIGHT)
-        pygame.draw.rect(screen, DARK_GRAY, room_rect)
-        
-        # Отрисовка стен
-        for wall in self.walls:
-            pygame.draw.rect(screen, BROWN, wall)
-        
+
+        # Каменный пол плиткой (кэшированная текстура, не пересчитывается каждый кадр)
+        screen.blit(self.floor_texture, (ROOM_OFFSET_X, ROOM_OFFSET_Y))
+
+        # Кирпичная кладка стен: у каждого сегмента свой оттенок + тёмная
+        # окантовка снизу-справа для лёгкого объёма
+        for wall, color in zip(self.walls, self.wall_colors):
+            pygame.draw.rect(screen, color, wall)
+            edge_color = tuple(max(0, c - 35) for c in color)
+            pygame.draw.rect(screen, edge_color, wall, 1)
+
+        # Колонны — неразрушимые препятствия (если есть в этой комнате)
+        for pillar in self.pillars:
+            pygame.draw.rect(screen, self._tinted(GRAY), pillar)
+            pygame.draw.rect(screen, tuple(max(0, c - 40) for c in self._tinted(GRAY)), pillar, 2)
+
+        # Свечение факелов на случайных местах вдоль стен (тёплый
+        # аддитивный градиент + мерцание)
+        for i, pos in enumerate(self.get_torch_positions()):
+            self._draw_torch(screen, pos, time, phase=i * 1.7)
+
         # Отрисовка дверей (пропуски в стенах). Если в комнате есть живые
         # враги — двери рисуются запертыми (сплошная стена + красная рамка),
         # проход через них физически блокируется в Game._check_room_boundaries

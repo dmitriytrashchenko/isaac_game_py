@@ -3,83 +3,100 @@ import random
 import math
 from constants import *
 
+ITEM_BASE_COLORS = {
+    "health": GREEN,
+    "damage_up": RED,
+    "speed_up": BLUE,
+    "tears_up": YELLOW,
+    "max_health": (255, 100, 100),
+}
+
+
 class Item(pygame.sprite.Sprite):
     def __init__(self, x, y, item_type=None):
         super().__init__()
-        
+
         # Случайный тип предмета, если не указан
         if item_type is None:
-            self.item_type = random.choice([
-                "health", "damage_up", "speed_up", "tears_up", "max_health"
-            ])
+            self.item_type = random.choice(list(ITEM_BASE_COLORS.keys()))
         else:
             self.item_type = item_type
-        
-        # Создание поверхности предмета
-        self.image = pygame.Surface((ITEM_SIZE, ITEM_SIZE))
-        self.rect = self.image.get_rect()
+
+        self.rect = pygame.Rect(0, 0, ITEM_SIZE, ITEM_SIZE)
         self.rect.center = (x, y)
-        
+
         # Эффекты анимации
         self.float_offset = 0
         self.float_speed = 3
         self.original_y = y
-        
-        # Цвет и описание в зависимости от типа
+
+        # Имя/описание в зависимости от типа
         self._setup_item_properties()
-    
+        self._render(ITEM_BASE_COLORS.get(self.item_type, WHITE))
+
     def _setup_item_properties(self):
-        """Настройка свойств предмета в зависимости от типа"""
-        if self.item_type == "health":
-            self.image.fill(GREEN)
-            self.name = "Health Up"
-            self.description = "Restores 1 health"
-        elif self.item_type == "damage_up":
-            self.image.fill(RED)
-            self.name = "Damage Up"
-            self.description = "Increases tear damage"
-        elif self.item_type == "speed_up":
-            self.image.fill(BLUE)
-            self.name = "Speed Up"
-            self.description = "Increases movement speed"
-        elif self.item_type == "tears_up":
-            self.image.fill(YELLOW)
-            self.name = "Tears Up"
-            self.description = "Increases tear rate"
-        elif self.item_type == "max_health":
-            self.image.fill((255, 100, 100))  # Светло-красный
-            self.name = "Max Health Up"
-            self.description = "Increases maximum health"
-        else:
-            self.image.fill(WHITE)
-            self.name = "Unknown Item"
-            self.description = "???"
-    
+        """Название и описание предмета в зависимости от типа"""
+        names = {
+            "health": ("Health Up", "Restores 1 health"),
+            "damage_up": ("Damage Up", "Increases tear damage"),
+            "speed_up": ("Speed Up", "Increases movement speed"),
+            "tears_up": ("Tears Up", "Increases tear rate"),
+            "max_health": ("Max Health Up", "Increases maximum health"),
+        }
+        self.name, self.description = names.get(self.item_type, ("Unknown Item", "???"))
+
     def update(self, dt):
         """Обновление анимации предмета"""
         # Эффект парения
         self.float_offset += self.float_speed * dt
         float_y = self.original_y + math.sin(self.float_offset) * 3
         self.rect.centery = int(float_y)
-        
+
         # Эффект мерцания
         brightness = int(200 + 55 * math.sin(self.float_offset * 2))
-        
+        base = ITEM_BASE_COLORS.get(self.item_type, (brightness, brightness, brightness))
+        color = tuple(min(255, int(c * (brightness / 255))) for c in base)
+
+        self._render(color)
+
+    def _render(self, color):
+        """Простой узнаваемый силуэт вместо плоского квадрата — форма
+        отличает тип предмета не только по цвету"""
+        s = ITEM_SIZE
+        surface = pygame.Surface((s, s), pygame.SRCALPHA)
+
         if self.item_type == "health":
-            color = (0, brightness, 0)
+            # Флакон зелья: горлышко + округлое тело с бликом
+            pygame.draw.rect(surface, color, (s // 2 - 1, 1, 2, 3))
+            pygame.draw.ellipse(surface, color, (2, 4, s - 4, s - 5))
+            highlight = tuple(min(255, c + 60) for c in color)
+            pygame.draw.ellipse(surface, highlight, (4, 6, 3, 3))
         elif self.item_type == "damage_up":
-            color = (brightness, 0, 0)
+            # Клинок: ромб-лезвие + рукоять
+            pygame.draw.polygon(surface, color, [
+                (s // 2, 1), (s // 2 + 3, s // 2), (s // 2, s - 4), (s // 2 - 3, s // 2)
+            ])
+            pygame.draw.rect(surface, (90, 60, 30), (s // 2 - 1, s - 4, 2, 4))
         elif self.item_type == "speed_up":
-            color = (0, 0, brightness)
+            # Сапог
+            pygame.draw.polygon(surface, color, [
+                (4, 2), (9, 2), (9, 8), (13, 8), (13, 13), (4, 13)
+            ])
         elif self.item_type == "tears_up":
-            color = (brightness, brightness, 0)
+            # Молния
+            pygame.draw.polygon(surface, color, [
+                (9, 1), (4, 9), (7, 9), (6, 15), (12, 6), (9, 6)
+            ])
         elif self.item_type == "max_health":
-            color = (brightness, brightness//2, brightness//2)
+            # Сердце: два кружка-доли + треугольник-низ
+            pygame.draw.circle(surface, color, (s // 2 - 3, 5), 3)
+            pygame.draw.circle(surface, color, (s // 2 + 3, 5), 3)
+            pygame.draw.polygon(surface, color, [(2, 6), (s - 2, 6), (s // 2, s - 1)])
         else:
-            color = (brightness, brightness, brightness)
-        
-        self.image.fill(color)
-    
+            surface.fill(color)
+
+        self.image = surface
+
     def apply_effect(self, player):
         """Применение эффекта предмета к игроку"""
         if self.item_type == "health":

@@ -17,14 +17,26 @@ class UI:
         self._draw_stats(screen, player)
         self._draw_controls(screen)
         self._draw_floor(screen, floor)
+        self._draw_currency(screen, player)
         if hero_name:
             self._draw_hero_name(screen, hero_name)
 
     def _draw_hero_name(self, screen, hero_name):
         """Имя выбранного на старте героя (верхний левый угол, под сердечками)"""
         text = self.small_font.render(hero_name, True, GOLD)
-        rect = text.get_rect(topleft=(20, 130))
+        rect = text.get_rect(topleft=(20, 155))
         screen.blit(text, rect)
+
+    def _draw_currency(self, screen, player):
+        """Счётчик глаз (валюта — пока без магазина)"""
+        icon = pygame.Rect(20, 132, 16, 12)
+        pygame.draw.ellipse(screen, WHITE, icon)
+        pygame.draw.ellipse(screen, GRAY, icon, 1)
+        pygame.draw.circle(screen, (90, 190, 90), icon.center, 3)
+        pygame.draw.circle(screen, BLACK, icon.center, 1)
+
+        text = self.small_font.render(f"x {player.eyes}", True, (200, 200, 180))
+        screen.blit(text, (icon.right + 6, icon.top - 2))
 
     def _draw_floor(self, screen, floor):
         """Номер текущего этажа"""

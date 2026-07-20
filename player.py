@@ -4,13 +4,19 @@ from constants import *
 from tear import Tear, MeleeSwing
 import viewport
 
+WEAPON_COLORS = {
+    "bow": YELLOW,
+    "sword": (180, 180, 190),
+    "staff": (150, 70, 200),
+}
+
+
 class Player(pygame.sprite.Sprite):
     def __init__(self, x, y, weapon="bow"):
         super().__init__()
 
-        # Создание поверхности игрока
-        self.image = pygame.Surface((PLAYER_SIZE, PLAYER_SIZE))
-        self.image.fill(YELLOW)
+        # Создание поверхности игрока (силуэт см. _render(), зависит от оружия)
+        self.image = pygame.Surface((PLAYER_SIZE, PLAYER_SIZE), pygame.SRCALPHA)
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
 
@@ -50,6 +56,9 @@ class Player(pygame.sprite.Sprite):
         self.invulnerable_time = 0
         self.invulnerable_duration = 1.0  # секунды неуязвимости после получения урона
 
+        # Валюта (глаза) — копится, магазина/траты пока нет
+        self.eyes = 0
+
         # Клавиши движения (только WASD — как в оригинале, стрелки не
         # двигают персонажа, а только целятся/стреляют, иначе зажатая
         # стрелка для выстрела перебивала бы противоположное движение WASD)
@@ -74,6 +83,8 @@ class Player(pygame.sprite.Sprite):
         # Прицеливание мышью (альтернатива стрелкам): зажатая ЛКМ стреляет
         # на все 360° в сторону курсора, а не только по 4 направлениям
         self.mouse_aim_active = False
+
+        self._render()
 
     def handle_event(self, event):
         if event.type == pygame.KEYDOWN:
@@ -105,16 +116,17 @@ class Player(pygame.sprite.Sprite):
         # Обработка стрельбы
         self._handle_shooting(dt)
         
-        # Обновление визуала при получении урона
-        if self.invulnerable_time > 0:
-            # Мигание при неуязвимости
-            if int(self.invulnerable_time * 10) % 2:
-                self.image.fill(RED)
-            else:
-                self.image.fill(YELLOW)
-        else:
-            self.image.fill(YELLOW)
-    
+        # Перерисовка (мигание красным при неуязвимости после урона)
+        self._render()
+
+    def _render(self):
+        """Мигание красным при неуязвимости после урона, иначе обычный
+        цвет героя — сам силуэт см. render_character_silhouette()"""
+        flashing = self.invulnerable_time > 0 and int(self.invulnerable_time * 10) % 2
+        color = RED if flashing else WEAPON_COLORS.get(self.weapon, YELLOW)
+        self.image = render_character_silhouette(self.weapon, color, PLAYER_SIZE)
+
+
     def _handle_movement(self, dt):
         # Сбрасываем скорость
         self.velocity.x = 0
@@ -226,6 +238,9 @@ class Player(pygame.sprite.Sprite):
     
     def heal(self, amount):
         self.health = min(self.health + amount, self.max_health)
+
+    def add_eyes(self, amount):
+        self.eyes += amount
     
     def increase_max_health(self, amount):
         self.max_health += amount
@@ -239,3 +254,30 @@ class Player(pygame.sprite.Sprite):
     
     def increase_tear_rate(self, amount):
         self.tear_rate = max(0.1, self.tear_rate - amount)  # Уменьшение времени = увеличение скорострельности
+
+
+def render_character_silhouette(weapon, color, size=PLAYER_SIZE):
+    """Силуэт персонажа зависит от оружия: Лучник с луком, Воин с мечом
+    и щитом, Маг с посохом — не только цвет разный, но и форма. Общая
+    функция, чтобы игрок (Player._render) и карточки выбора героя
+    (menu.HeroSelectMenu) рисовали одинаковый силуэт."""
+    s = size
+    surface = pygame.Surface((s, s), pygame.SRCALPHA)
+
+    # Общий силуэт: голова + торс + ноги
+    pygame.draw.circle(surface, color, (s // 2, 6), 5)
+    pygame.draw.rect(surface, color, (s // 2 - 5, 10, 10, 10))
+    pygame.draw.line(surface, color, (s // 2 - 3, 20), (s // 2 - 4, 23), 2)
+    pygame.draw.line(surface, color, (s // 2 + 3, 20), (s // 2 + 4, 23), 2)
+
+    if weapon == "sword":
+        pygame.draw.rect(surface, (210, 210, 220), (s - 4, 2, 3, 15))  # меч
+        pygame.draw.rect(surface, (110, 75, 30), (0, 9, 5, 11))  # щит
+    elif weapon == "staff":
+        pygame.draw.line(surface, (110, 75, 30), (s - 3, 1), (s - 3, 21), 2)  # посох
+        pygame.draw.circle(surface, FIRE_ORANGE, (s - 3, 1), 3)  # навершие
+    else:  # bow
+        pygame.draw.arc(surface, (140, 95, 40), (s - 9, 2, 10, 18), -1.3, 1.3, 2)  # лук
+        pygame.draw.line(surface, (220, 220, 200), (s - 8, 3), (s - 8, 19), 1)  # тетива
+
+    return surface
