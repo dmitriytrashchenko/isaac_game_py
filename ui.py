@@ -24,12 +24,12 @@ class UI:
     def _draw_hero_name(self, screen, hero_name):
         """Имя выбранного на старте героя (верхний левый угол, под сердечками)"""
         text = self.small_font.render(hero_name, True, GOLD)
-        rect = text.get_rect(topleft=(20, 155))
+        rect = text.get_rect(topleft=(20, 200))
         screen.blit(text, rect)
 
     def _draw_currency(self, screen, player):
         """Счётчик глаз (валюта — пока без магазина)"""
-        icon = pygame.Rect(20, 132, 16, 12)
+        icon = pygame.Rect(20, 178, 16, 12)
         pygame.draw.ellipse(screen, WHITE, icon)
         pygame.draw.ellipse(screen, GRAY, icon, 1)
         pygame.draw.circle(screen, (90, 190, 90), icon.center, 3)
@@ -76,23 +76,25 @@ class UI:
             pygame.draw.rect(screen, GRAY, heart_rect, 2)
     
     def _draw_stats(self, screen, player):
-        """Отрисовка статистик игрока"""
+        """Отрисовка основных характеристик игрока (Isaac-style: Health
+        отдельно сердечками, Speed/Damage/Tears/Range/Shot Speed/Luck
+        тут. Скрытые статы — Shot Height/Knockback/Damage Multiplier —
+        сознательно не показаны, как и в оригинале без мода Founder's HUD)"""
         stats_x = 20
         stats_y = 50
-        line_height = 25
-        
-        # Урон
-        damage_text = self.small_font.render(f"Damage: {player.tear_damage:.1f}", True, WHITE)
-        screen.blit(damage_text, (stats_x, stats_y))
-        
-        # Скорость
-        speed_text = self.small_font.render(f"Speed: {player.speed:.0f}", True, WHITE)
-        screen.blit(speed_text, (stats_x, stats_y + line_height))
-        
-        # Скорострельность
-        tears_per_sec = 1.0 / player.tear_rate if player.tear_rate > 0 else 0
-        tears_text = self.small_font.render(f"Tears: {tears_per_sec:.1f}/s", True, WHITE)
-        screen.blit(tears_text, (stats_x, stats_y + line_height * 2))
+        line_height = 20
+
+        lines = [
+            f"Damage: {player.tear_damage * player.damage_multiplier:.1f}",
+            f"Speed: {player.speed:.0f}",
+            f"Tears: {(1.0 / player.tear_rate if player.tear_rate > 0 else 0):.1f}/s",
+            f"Range: {player.tear_range:.1f}",
+            f"Shot Speed: {player.tear_speed:.0f}",
+            f"Luck: {player.luck:+.0f}",
+        ]
+        for i, line in enumerate(lines):
+            text = self.small_font.render(line, True, WHITE)
+            screen.blit(text, (stats_x, stats_y + line_height * i))
     
     def _draw_controls(self, screen):
         """Отрисовка подсказок по управлению"""

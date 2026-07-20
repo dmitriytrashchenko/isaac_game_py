@@ -20,13 +20,25 @@ class Player(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
 
-        # Характеристики игрока
+        # Основные характеристики (как в Isaac) — Health/Speed/Damage/Tears
+        # (частота атаки, tear_rate) уже были; Range/Shot Speed/Luck — новые
         self.health = PLAYER_MAX_HEALTH
         self.max_health = PLAYER_MAX_HEALTH
         self.speed = PLAYER_SPEED
         self.tear_damage = PLAYER_TEAR_DAMAGE
-        self.tear_speed = PLAYER_TEAR_SPEED
-        self.tear_rate = PLAYER_TEAR_RATE
+        self.tear_speed = PLAYER_TEAR_SPEED  # "Shot Speed" — скорость полёта снаряда
+        self.tear_rate = PLAYER_TEAR_RATE  # "Tears" — задержка между атаками, меньше = чаще
+        self.tear_range = TEAR_LIFETIME  # "Range" — время жизни снаряда до угасания
+        self.luck = 0  # "Luck" — бонус к шансам выпадения предметов/валюты
+
+        # Скрытые характеристики — не показаны в обычном UI (как и в
+        # Isaac без мода Founder's HUD), но реально влияют на геймплей
+        self.shot_height = 0  # снаряды летят "над" вазами/колоннами, если выше порога
+        self.knockback = 40  # отталкивание врагов при попадании снаряда
+        self.damage_multiplier = 1.0  # множитель поверх tear_damage
+        # "Evil" из Isaac (шанс сделок с Дьяволом) сознательно не реализован —
+        # у нас нет комнат Дьявола/Ангела, добавлять инертный счётчик без
+        # эффекта не стал. См. Known_Issues.
 
         # Оружие героя ("bow" Лучник / "sword" Воин / "staff" Маг) — см.
         # menu.py HEROES и Setting.md. Влияет на стиль атаки и часть статов.
@@ -196,7 +208,11 @@ class Player(pygame.sprite.Sprite):
         tear_x = self.rect.centerx + aim_dir.x * (PLAYER_SIZE // 2 + size // 2)
         tear_y = self.rect.centery + aim_dir.y * (PLAYER_SIZE // 2 + size // 2)
 
-        tear = Tear(tear_x, tear_y, aim_dir, self.tear_speed, self.tear_damage, color=color, size=size)
+        tear = Tear(
+            tear_x, tear_y, aim_dir, self.tear_speed, self.tear_damage * self.damage_multiplier,
+            color=color, size=size, lifetime=self.tear_range, knockback=self.knockback,
+            pierce_obstacles=self.shot_height >= SHOT_HEIGHT_PIERCE_THRESHOLD,
+        )
         self.new_tears.append(tear)
 
     def _melee_attack(self, direction):
@@ -208,7 +224,7 @@ class Player(pygame.sprite.Sprite):
         swing_y = self.rect.centery + aim_dir.y * 30
         self.new_melee_swings.append({
             "pos": (swing_x, swing_y),
-            "damage": self.tear_damage,
+            "damage": self.tear_damage * self.damage_multiplier,
         })
 
     def get_new_tears(self):
@@ -254,6 +270,21 @@ class Player(pygame.sprite.Sprite):
     
     def increase_tear_rate(self, amount):
         self.tear_rate = max(0.1, self.tear_rate - amount)  # Уменьшение времени = увеличение скорострельности
+
+    def increase_range(self, amount):
+        self.tear_range += amount
+
+    def increase_luck(self, amount):
+        self.luck += amount
+
+    def increase_shot_height(self, amount):
+        self.shot_height += amount
+
+    def increase_knockback(self, amount):
+        self.knockback += amount
+
+    def increase_damage_multiplier(self, amount):
+        self.damage_multiplier += amount
 
 
 def render_character_silhouette(weapon, color, size=PLAYER_SIZE):

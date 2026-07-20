@@ -6,6 +6,7 @@ from enemy import Enemy
 from item import Item
 from chest import Chest
 from vase import Vase
+from torch import Torch, TORCH_MAX_HEALTH
 
 TORCH_MARGIN = 30
 
@@ -44,10 +45,12 @@ class Room:
         self.chest = None
         self.chest_rolled = False
 
-        # Позиции факелов генерируются лениво в get_torch_positions() —
-        # после того, как двери уже расставлены (иначе факел может
-        # оказаться прямо в дверном проёме)
-        self.torch_positions = None
+        # Факелы (объекты Torch — разрушаемые) генерируются лениво в
+        # get_torches() после того, как двери уже расставлены (иначе
+        # факел может оказаться прямо в дверном проёме)
+        self.torches = None
+        # Сработало ли уже событие "все факелы потушены" (см. Game._check_torch_challenge)
+        self.torch_challenge_triggered = False
 
         # random с отдельным сидом на комнату — используется для стен,
         # пола, тона палитры: одна комната выглядит целостно, но отличается
@@ -243,14 +246,18 @@ class Room:
         if direction in self.doors:
             self.doors[direction] = False
     
-    def get_torch_positions(self):
-        """Позиции факелов — генерируются один раз лениво (после того,
-        как двери уже расставлены дандженом) и кэшируются"""
-        if self.torch_positions is None:
-            self.torch_positions = self._generate_torch_positions()
-        return self.torch_positions
+    def get_torches(self):
+        """Факелы (объекты Torch) — генерируются один раз лениво (после
+        того, как двери уже расставлены дандженом) и кэшируются"""
+        if self.torches is None:
+            self.torches = self._generate_torches()
+        return self.torches
 
-    def _generate_torch_positions(self):
+    def all_torches_extinguished(self):
+        torches = self.get_torches()
+        return bool(torches) and all(t.extinguished for t in torches)
+
+    def _generate_torches(self):
         """2-4 факела на случайных местах вдоль стен (не только по углам),
         с отступом от дверных проёмов и друг от друга"""
         rng = self._rng
@@ -281,31 +288,43 @@ class Room:
 
             positions.append((x, y))
 
-        return positions
+        return [Torch(x, y) for x, y in positions]
 
-    def _draw_torch(self, screen, pos, time, phase=0.0):
-        """Тёплое аддитивное свечение факела — компактное и мягкое
-        (раньше было слишком большим и плоским, выглядело как оранжевое
-        пятно) + скоба на стене с мерцающим двухслойным пламенем"""
+    def _draw_torch(self, screen, torch, time, phase=0.0):
+        """Тёплое аддитивное свечение факела — компактное и мягкое +
+        скоба на стене с мерцающим двухслойным пламенем. Тускнеет по
+        мере урона (torch.health), потушенный факел — просто холодная
+        скоба без пламени/свечения."""
+        pos = torch.pos
+
+        if torch.extinguished:
+            pygame.draw.rect(screen, (50, 45, 40), (pos[0] - 2, pos[1] - 2, 4, 12))
+            return
+
+        dim = torch.health / TORCH_MAX_HEALTH  # 1.0 цел, ближе к 0 перед тем как потухнет
         flicker = math.sin(time * 9 + phase) * 2 + math.sin(time * 23 + phase) * 1
 
-        radius = int(30 + flicker)
+        radius = int((22 + flicker) + 8 * dim)
+        glow_alpha = max(4, int(16 * dim))
         glow = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
         for r in range(radius, 0, -6):
-            pygame.draw.circle(glow, (255, 140, 40, 16), (radius, radius), r)
+            pygame.draw.circle(glow, (255, 140, 40, glow_alpha), (radius, radius), r)
         screen.blit(glow, (pos[0] - radius, pos[1] - radius), special_flags=pygame.BLEND_RGBA_ADD)
 
         # Скоба-держатель на стене
         pygame.draw.rect(screen, (60, 40, 20), (pos[0] - 2, pos[1] - 2, 4, 12))
 
-        # Пламя: внешний слой (оранжевый) + внутренний более яркий (почти белый)
-        flame_h = 8 + flicker
-        pygame.draw.polygon(screen, (255, 190, 70), [
+        # Пламя: внешний слой (оранжевый) + внутренний более яркий (почти белый),
+        # высота и яркость падают вместе со здоровьем факела
+        flame_h = (6 + flicker) * dim + 2
+        outer = tuple(int(c * (0.4 + 0.6 * dim)) for c in (255, 190, 70))
+        inner = tuple(int(c * (0.4 + 0.6 * dim)) for c in (255, 245, 190))
+        pygame.draw.polygon(screen, outer, [
             (pos[0], pos[1] - 6 - flame_h),
             (pos[0] - 4, pos[1] - 3),
             (pos[0] + 4, pos[1] - 3),
         ])
-        pygame.draw.polygon(screen, (255, 245, 190), [
+        pygame.draw.polygon(screen, inner, [
             (pos[0], pos[1] - 4 - flame_h * 0.55),
             (pos[0] - 2, pos[1] - 3),
             (pos[0] + 2, pos[1] - 3),
@@ -332,8 +351,8 @@ class Room:
 
         # Свечение факелов на случайных местах вдоль стен (тёплый
         # аддитивный градиент + мерцание)
-        for i, pos in enumerate(self.get_torch_positions()):
-            self._draw_torch(screen, pos, time, phase=i * 1.7)
+        for i, torch in enumerate(self.get_torches()):
+            self._draw_torch(screen, torch, time, phase=i * 1.7)
 
         # Отрисовка дверей (пропуски в стенах). Если в комнате есть живые
         # враги — двери рисуются запертыми (сплошная стена + красная рамка),

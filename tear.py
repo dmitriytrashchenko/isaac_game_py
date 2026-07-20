@@ -2,7 +2,8 @@ import pygame
 from constants import *
 
 class Tear(pygame.sprite.Sprite):
-    def __init__(self, x, y, direction, speed, damage, color=BLUE, size=TEAR_SIZE):
+    def __init__(self, x, y, direction, speed, damage, color=BLUE, size=TEAR_SIZE,
+                 lifetime=None, knockback=0, pierce_obstacles=False):
         super().__init__()
 
         self.base_color = color
@@ -18,7 +19,14 @@ class Tear(pygame.sprite.Sprite):
         self.direction = pygame.math.Vector2(direction)
         self.speed = speed
         self.damage = damage
-        self.lifetime = TEAR_LIFETIME
+        self.max_lifetime = lifetime if lifetime is not None else TEAR_LIFETIME
+        self.lifetime = self.max_lifetime
+        # "Knockback" — сила отталкивания врага при попадании (Game.update)
+        self.knockback = knockback
+        # "Shot Height" выше порога — снаряд летит "над" вазами/колоннами,
+        # не сталкиваясь с ними (см. Game._resolve_static_obstacle_collisions
+        # использование и коллизии слёз с вазами/факелами)
+        self.pierce_obstacles = pierce_obstacles
 
         # Скорость
         self.velocity = self.direction * self.speed
@@ -32,7 +40,7 @@ class Tear(pygame.sprite.Sprite):
         self.lifetime -= dt
 
         # Изменение прозрачности в зависимости от времени жизни
-        alpha = int(255 * (self.lifetime / TEAR_LIFETIME))
+        alpha = int(255 * (self.lifetime / self.max_lifetime)) if self.max_lifetime else 0
         alpha = max(0, min(255, alpha))
 
         # Создание новой поверхности с альфа-каналом

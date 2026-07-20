@@ -6,7 +6,7 @@ from enemy import Enemy
 from room import Room
 from item import Item
 from tear import MeleeSwing
-from chest import TIER_COLORS
+from chest import Chest, TIER_COLORS
 from ui import UI
 from dungeon import Dungeon
 from transition import RoomTransition, DoorDetector
@@ -127,18 +127,33 @@ class Game:
             self.all_sprites.add(self.current_room.chest)
             self.chests.add(self.current_room.chest)
 
+    def _luck_bonus(self):
+        """'Luck' поднимает шансы выпадения предметов/валюты — +2% за
+        очко удачи, не больше +30% (мягкий кап, чтобы не выйти за 100%)"""
+        return min(0.3, self.player.luck * 0.02)
+
     def _kill_enemy_with_drop(self, enemy):
-        """Убивает врага: шанс 30% оставить предмет, отдельно шанс 20%
-        оставить валюту (глаз) — независимые роллы, вазы глаза не дают"""
+        """Убивает врага: базовый шанс 30% оставить предмет и 20% валюту
+        (глаз) — оба растут с Luck игрока, независимые роллы, вазы глаза не дают"""
         self._spawn_hit_sparks(enemy.rect.center, enemy._current_color(), count=10)
-        if random.random() < 0.3:
+        luck_bonus = self._luck_bonus()
+        if random.random() < 0.3 + luck_bonus:
             item = Item(enemy.rect.centerx, enemy.rect.centery)
             self.all_sprites.add(item)
             self.items.add(item)
-        if random.random() < 0.2:
+        if random.random() < 0.2 + luck_bonus:
             eye = Eye(enemy.rect.centerx, enemy.rect.centery, amount=1)
             self.all_sprites.add(eye)
             self.currency.add(eye)
+
+        # Награда за челлендж "потуши все факелы" — усиленные враги (см.
+        # _spawn_enhanced_wave) с шансом ENHANCED_CHEST_CHANCE оставляют
+        # сундук редкости 1-5
+        if getattr(enemy, "enhanced", False) and random.random() < ENHANCED_CHEST_CHANCE + luck_bonus:
+            chest = Chest(enemy.rect.centerx, enemy.rect.centery, tier=random.randint(1, 5))
+            self.all_sprites.add(chest)
+            self.chests.add(chest)
+
         enemy.kill()
 
     def _destroy_vase(self, vase):
@@ -147,12 +162,56 @@ class Game:
         vase.destroyed = True
         self._spawn_hit_sparks(vase.rect.center, vase.shard_color, count=8)
 
-        if random.random() < 0.4:
+        if random.random() < 0.4 + self._luck_bonus():
             item = Item(vase.rect.centerx, vase.rect.centery)
             self.all_sprites.add(item)
             self.items.add(item)
 
         vase.kill()
+
+    def _check_torch_challenge(self):
+        """Вызывается при потухании факела. Если это был последний
+        горящий факел комнаты — с шансом TORCH_CHALLENGE_CHANCE спавнит
+        усиленную волну врагов (награда за побочный челлендж 'потуши
+        все факелы'). Сам факт зачистки всех факелов не гарантирует волну."""
+        room = self.current_room
+        if room.torch_challenge_triggered or not room.all_torches_extinguished():
+            return
+        room.torch_challenge_triggered = True
+        if random.random() < TORCH_CHALLENGE_CHANCE:
+            self._spawn_enhanced_wave()
+
+    def _spawn_enhanced_wave(self):
+        """Усиленные версии обычных врагов комнаты (награда за потушенные
+        факелы) — выше здоровье/урон, помечены enemy.enhanced для шанса
+        ENHANCED_CHEST_CHANCE выронить сундук редкости 1-5 при смерти
+        (см. _kill_enemy_with_drop). Комната запирается заново, пока волна
+        не будет зачищена — см. constants.py / Balance_Parameters.md"""
+        enemy_types = ["basic", "shooter", "tank", "fast", "brute"]
+        weights = [35, 25, 10, 20, 10]
+        count = random.randint(ENHANCED_WAVE_MIN, ENHANCED_WAVE_MAX)
+
+        for _ in range(count):
+            for _attempt in range(30):
+                x = random.randint(ROOM_OFFSET_X + 50, ROOM_OFFSET_X + ROOM_WIDTH - 50)
+                y = random.randint(ROOM_OFFSET_Y + 50, ROOM_OFFSET_Y + ROOM_HEIGHT - 50)
+                dx, dy = x - self.player.rect.centerx, y - self.player.rect.centery
+                if (dx * dx + dy * dy) ** 0.5 >= 150:
+                    break
+
+            enemy_type = random.choices(enemy_types, weights=weights, k=1)[0]
+            enemy = Enemy(x, y, enemy_type)
+            enemy.health = int(enemy.health * ENHANCED_HEALTH_MULT) or 1
+            enemy.max_health = enemy.health
+            enemy.damage = round(enemy.damage * ENHANCED_DAMAGE_MULT, 1)
+            enemy.enhanced = True
+            enemy._render()
+
+            self.all_sprites.add(enemy)
+            self.enemies.add(enemy)
+            self.current_room.enemies.append(enemy)
+
+        self.current_room.cleared = False
 
     def _resolve_static_obstacle_collisions(self):
         """Простое выталкивание игрока из целых ваз и колонн по оси
@@ -254,13 +313,13 @@ class Game:
         if self.shake_timer > 0:
             self.shake_timer -= dt
 
-        # Периодический спавн искр-угольков от факелов текущей комнаты
+        # Периодический спавн искр-угольков от ещё горящих факелов комнаты
         self.ember_timer += dt
-        torches = self.current_room.get_torch_positions()
-        if self.ember_timer >= self.ember_interval and torches:
+        lit_torches = [t for t in self.current_room.get_torches() if not t.extinguished]
+        if self.ember_timer >= self.ember_interval and lit_torches:
             self.ember_timer = 0.0
-            torch = random.choice(torches)
-            ember = particles.spawn_ember((torch[0], torch[1] - 12))
+            torch = random.choice(lit_torches)
+            ember = particles.spawn_ember((torch.pos[0], torch.pos[1] - 12))
             self.all_sprites.add(ember)
             self.particles.add(ember)
 
@@ -290,6 +349,12 @@ class Game:
                     vase.take_damage(swing["damage"])
                     if vase.health <= 0:
                         self._destroy_vase(vase)
+            for torch in self.current_room.get_torches():
+                if not torch.extinguished and swing_rect.colliderect(torch.rect):
+                    just_extinguished = torch.take_damage(swing["damage"])
+                    self._spawn_hit_sparks(torch.rect.center, (255, 170, 60), count=3)
+                    if just_extinguished:
+                        self._check_torch_challenge()
 
             slash = MeleeSwing(swing["pos"])
             self.all_sprites.add(slash)
@@ -348,11 +413,15 @@ class Game:
                 self.player.take_damage(tear.damage)
                 self._trigger_shake(6, 0.2)
 
-        # Столкновения слёз с врагами
+        # Столкновения слёз с врагами (+ Knockback — отталкивание при попадании)
         for tear in self.tears:
             hit_enemies = pygame.sprite.spritecollide(tear, self.enemies, False)
             for enemy in hit_enemies:
                 enemy.take_damage(tear.damage)
+                if tear.knockback:
+                    enemy.rect.x += tear.direction.x * tear.knockback
+                    enemy.rect.y += tear.direction.y * tear.knockback
+                    enemy._clamp_to_room()
                 tear.kill()
 
                 if enemy.health <= 0:
@@ -360,14 +429,31 @@ class Game:
                 else:
                     self._spawn_hit_sparks(enemy.rect.center, enemy._current_color(), count=4)
 
-        # Столкновения слёз с вазами
+        # Столкновения слёз с вазами (Shot Height выше порога — снаряд
+        # пролетает "над" препятствием, не задевая его)
         for tear in self.tears:
+            if tear.pierce_obstacles:
+                continue
             hit_vases = pygame.sprite.spritecollide(tear, self.vases, False)
             for vase in hit_vases:
                 vase.take_damage(tear.damage)
                 tear.kill()
                 if vase.health <= 0:
                     self._destroy_vase(vase)
+
+        # Столкновения слёз с факелами (Torch — не спрайт, ручная проверка)
+        for tear in list(self.tears):
+            if tear.pierce_obstacles:
+                continue
+            for torch in self.current_room.get_torches():
+                if torch.extinguished or not tear.rect.colliderect(torch.rect):
+                    continue
+                just_extinguished = torch.take_damage(tear.damage)
+                tear.kill()
+                self._spawn_hit_sparks(torch.rect.center, (255, 170, 60), count=3)
+                if just_extinguished:
+                    self._check_torch_challenge()
+                break
 
         # Игрок физически не проходит сквозь целые вазы и колонны
         self._resolve_static_obstacle_collisions()

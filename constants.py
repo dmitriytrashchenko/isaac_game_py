@@ -49,6 +49,7 @@ ENEMY_TEAR_SPEED = 250
 # Слёзы (пули)
 TEAR_SIZE = 8
 TEAR_LIFETIME = 2.0  # секунд
+SHOT_HEIGHT_PIERCE_THRESHOLD = 10  # Shot Height от этого порога снаряды летят "над" вазами/колоннами
 
 # Предметы
 ITEM_SIZE = 16
@@ -68,3 +69,12 @@ ROOM_TYPES = {
     'BOSS': 2,
     'SECRET': 3
 }
+
+# Челлендж "потуши все факелы" — см. Balance_Parameters.md за полным
+# списком процентов/параметров игры
+TORCH_CHALLENGE_CHANCE = 0.15  # шанс, что потухание ВСЕХ факелов комнаты вызовет усиленную волну
+ENHANCED_WAVE_MIN = 3
+ENHANCED_WAVE_MAX = 5
+ENHANCED_HEALTH_MULT = 1.6
+ENHANCED_DAMAGE_MULT = 1.4
+ENHANCED_CHEST_CHANCE = 0.15  # шанс на сундук с КАЖДОГО усиленного врага при смерти

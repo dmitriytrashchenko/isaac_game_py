@@ -9,6 +9,8 @@ ITEM_BASE_COLORS = {
     "speed_up": BLUE,
     "tears_up": YELLOW,
     "max_health": (255, 100, 100),
+    "luck_up": (80, 220, 120),
+    "range_up": (120, 190, 230),
 }
 
 
@@ -42,6 +44,8 @@ class Item(pygame.sprite.Sprite):
             "speed_up": ("Speed Up", "Increases movement speed"),
             "tears_up": ("Tears Up", "Increases tear rate"),
             "max_health": ("Max Health Up", "Increases maximum health"),
+            "luck_up": ("Luck Up", "Increases luck (drop chances)"),
+            "range_up": ("Range Up", "Increases tear range"),
         }
         self.name, self.description = names.get(self.item_type, ("Unknown Item", "???"))
 
@@ -92,6 +96,16 @@ class Item(pygame.sprite.Sprite):
             pygame.draw.circle(surface, color, (s // 2 - 3, 5), 3)
             pygame.draw.circle(surface, color, (s // 2 + 3, 5), 3)
             pygame.draw.polygon(surface, color, [(2, 6), (s - 2, 6), (s // 2, s - 1)])
+        elif self.item_type == "luck_up":
+            # Клевер: 4 кружка-лепестка + стебель
+            for dx, dy in ((-3, -3), (3, -3), (-3, 3), (3, 3)):
+                pygame.draw.circle(surface, color, (s // 2 + dx, s // 2 - 2 + dy), 3)
+            pygame.draw.line(surface, (60, 140, 70), (s // 2, s // 2 + 3), (s // 2, s - 1), 2)
+        elif self.item_type == "range_up":
+            # Мишень: концентрические кольца
+            pygame.draw.circle(surface, color, (s // 2, s // 2), 7, 2)
+            pygame.draw.circle(surface, color, (s // 2, s // 2), 4, 1)
+            pygame.draw.circle(surface, color, (s // 2, s // 2), 1)
         else:
             surface.fill(color)
 
@@ -109,3 +123,7 @@ class Item(pygame.sprite.Sprite):
             player.increase_tear_rate(0.05)
         elif self.item_type == "max_health":
             player.increase_max_health(2)
+        elif self.item_type == "luck_up":
+            player.increase_luck(1)
+        elif self.item_type == "range_up":
+            player.increase_range(0.4)

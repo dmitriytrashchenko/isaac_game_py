@@ -62,6 +62,9 @@ def _reward_legendary(player):
     player.increase_speed(50)
     player.increase_tear_rate(0.08)
     player.increase_max_health(2)
+    player.increase_luck(3)
+    player.increase_range(0.5)
+    player.increase_damage_multiplier(0.3)
 
 
 # Индекс i соответствует уровню редкости i+1

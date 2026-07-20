@@ -178,17 +178,18 @@
   },
   "active": "ff243fa5b3ea1f40",
   "lastOpenFiles": [
-    "Setting.md.tmp.12284.23d3846f30c3",
-    "README.md.tmp.12284.3177c89fa1ef",
-    "README.md.tmp.12284.0f30dc20bdca",
-    "README.md.tmp.12284.75c6d56d4da1",
-    "README.md.tmp.12284.a2c6e64b65a2",
-    "Known_Issues.md.tmp.12284.99c1bcf8d9ca",
-    "Changelog.md.tmp.12284.67ba7c678d0f",
-    "Session_2026-07-20_Visual_Overhaul.md",
-    "Session_2026-07-20_Visual_Overhaul.md.tmp.12284.071b959f1099",
+    "README.md.tmp.12284.1df4bdd0c952",
+    "Known_Issues.md.tmp.12284.a73da0003cb4",
+    "Changelog.md.tmp.12284.f2daf892f2f5",
+    "Balance_Parameters.md",
+    "Balance_Parameters.md.tmp.12284.61486d574597",
+    "game.py.tmp.12284.fc1607c992ac",
+    "game.py.tmp.12284.b104d02e301b",
+    "constants.py.tmp.12284.0a2460c0bfdc",
+    "game.py.tmp.12284.7a672bccc661",
     "__pycache__/menu.cpython-311.pyc",
     "__pycache__/particles.cpython-311.pyc",
-    "__pycache__/currency.cpython-311.pyc"
+    "__pycache__/currency.cpython-311.pyc",
+    "Session_2026-07-20_Visual_Overhaul.md"
   ]
 }
