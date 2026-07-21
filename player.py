@@ -20,7 +20,7 @@ class Player(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.center = (x, y)
 
-        # Основные характеристики (как в Isaac) — Health/Speed/Damage/Tears
+        # Основные характеристики — Health/Speed/Damage/Tears
         # (частота атаки, tear_rate) уже были; Range/Shot Speed/Luck — новые
         self.health = PLAYER_MAX_HEALTH
         self.max_health = PLAYER_MAX_HEALTH
@@ -31,12 +31,12 @@ class Player(pygame.sprite.Sprite):
         self.tear_range = TEAR_LIFETIME  # "Range" — время жизни снаряда до угасания
         self.luck = 0  # "Luck" — бонус к шансам выпадения предметов/валюты
 
-        # Скрытые характеристики — не показаны в обычном UI (как и в
-        # Isaac без мода Founder's HUD), но реально влияют на геймплей
+        # Скрытые характеристики — не показаны в обычном UI, но реально
+        # влияют на геймплей
         self.shot_height = 0  # снаряды летят "над" вазами/колоннами, если выше порога
         self.knockback = 40  # отталкивание врагов при попадании снаряда
         self.damage_multiplier = 1.0  # множитель поверх tear_damage
-        # "Evil" из Isaac (шанс сделок с Дьяволом) сознательно не реализован —
+        # "Evil" (шанс сделок с Дьяволом) сознательно не реализован —
         # у нас нет комнат Дьявола/Ангела, добавлять инертный счётчик без
         # эффекта не стал. См. Known_Issues.
 
@@ -81,8 +81,8 @@ class Player(pygame.sprite.Sprite):
             pygame.K_d: False
         }
 
-        # Направления стрельбы по стрелкам: как в оригинальном Айзеке,
-        # целится по ПОСЛЕДНЕЙ зажатой стрелке, а не по фиксированному
+        # Направления стрельбы по стрелкам: целится по ПОСЛЕДНЕЙ зажатой
+        # стрелке, а не по фиксированному
         # приоритету. Список хранит зажатые стрелки в порядке нажатия.
         self.shoot_key_to_direction = {
             pygame.K_UP: DIRECTIONS['UP'],

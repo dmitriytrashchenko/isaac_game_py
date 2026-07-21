@@ -31,9 +31,9 @@ related: [[Changelog]], [[Known_Issues]], [[Balance_Parameters]], [[Enemies]], [
 
 Все 4 пункта проверены программными тестами до коммита (принудительный запуск `_spawn_enhanced_wave()` с живыми/пустыми `self.enemies` для проверки x2/x3; полный цикл спавн→убийство всех enhanced→ровно 1 сундук; 20000 роллов на 0.1%-дроп; проверка типов/health спавненного доп.-босса в боссовой комнате).
 
-## #stats — полная Isaac-style система характеристик
+## #stats — полная система характеристик в стиле жанра
 
-Реализована по детальному описанию пользователя (цитата wiki-механики Isaac), затрагивает `player.py`, `ui.py`, `tear.py`, `item.py`, `chest.py`, `enemy.py`:
+Реализована по детальному описанию пользователя (цитата wiki-механики жанра), затрагивает `player.py`, `ui.py`, `tear.py`, `item.py`, `chest.py`, `enemy.py`:
 
 - **Видимые статы (HUD)**: Health (сердечки, как было), Speed, Damage (с учётом `damage_multiplier`), Tears (выстр/сек, обратно от `tear_rate`), Range (`tear_range`, время жизни снаряда), Shot Speed (`tear_speed`), Luck
 - **Скрытые статы** (не в HUD, как в оригинале без мода Founder's HUD): Shot Height — снаряды получают `pierce_obstacles=True` и летят "над" вазами/колоннами при значении `≥ SHOT_HEIGHT_PIERCE_THRESHOLD = 10`; Knockback — сила отталкивания при попадании; Damage Multiplier — множитель поверх базового урона

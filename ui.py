@@ -76,7 +76,7 @@ class UI:
             pygame.draw.rect(screen, GRAY, heart_rect, 2)
     
     def _draw_stats(self, screen, player):
-        """Отрисовка основных характеристик игрока (Isaac-style: Health
+        """Отрисовка основных характеристик игрока (Health
         отдельно сердечками, Speed/Damage/Tears/Range/Shot Speed/Luck
         тут. Скрытые статы — Shot Height/Knockback/Damage Multiplier —
         сознательно не показаны, как и в оригинале без мода Founder's HUD)"""
